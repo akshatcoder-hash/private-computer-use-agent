@@ -3,8 +3,7 @@
 > Your screen is the most private data you have. Every pixel either stays on your Mac or goes only to an attested enclave.
 
 <!-- DEMO VIDEO -->
-<!-- TODO(WP7): replace this line with the demo video link, and add the screenshot at docs/media/panel.png (the receipt panel mid-run). The image does not exist yet. -->
-![Receipt panel mid-run](docs/media/panel.png)
+![Receipt panel after a finished run of the hero task](docs/media/panel.png)
 
 An agent that operates your Mac's screen for you. A vision model reads the screenshot and picks the next action. A small local model turns that action into a click position. Each step leaves a receipt that you can check offline.
 
@@ -89,7 +88,11 @@ step result   kind         hashes  signature signer  action     recorded
 PASS: 3 of 3 step(s) verified
 ```
 
-Change one byte of a saved response and the check fails (`tests/test_verify.py`, `test_tampered_response_byte_fails`). Details and code references: [docs/VERIFICATION.md](docs/VERIFICATION.md).
+Change one byte of a saved response and the check fails (`tests/test_verify.py`, `test_tampered_response_byte_fails`). If a live reply fails the check, the agent stops before acting and the panel says so (this one is replayed from `panel/sample/unverified-run`, not a live run):
+
+![Receipt panel showing a reply that was not verified](docs/media/panel-unverified.png)
+
+Details and code references: [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## NEAR tools used
 
@@ -135,9 +138,12 @@ Useful flags: `--max-steps`, `--keep-screenshots`, `--no-e2ee`, `--allow-gateway
 
 ## Results
 
-<!-- RESULTS: filled from docs/RUNS.md -->
+Three tasks, five consecutive passing runs each, on one Apple M4 Mac: the hero task (download the October statement as PDF from the mock bank), a $250 transfer on the same bank, and a Wikipedia search that opens the article. Success was judged outside the agent (the bank's event log, the browser's final URL), and every run also passed `verify`.
 
-Measured pass rates and latencies are in [docs/RUNS.md](docs/RUNS.md).
+- Median planner latency per step: 1.68 s (hero), 1.23 s (transfer), 1.53 s (Wikipedia).
+- Median Atom latency per click: 0.40 s, 0.37 s, 0.48 s.
+
+This is 5 consecutive runs per task on one machine, not a pass rate. One early transfer run failed before the final prompt; the full list of runs, failures and what is not verified is in [docs/RUNS.md](docs/RUNS.md).
 
 ## Limits
 
