@@ -1,0 +1,30 @@
+{
+  "name": "Atom",
+  "version": "tinyclick-4bit-v1",
+  "directory": "tinyclick-4bit",
+  "bytesTotal": 169049084,
+  "source": {
+    "comment": "Single release asset. Its SHA-256 is checked before extraction, then every extracted file is verified against its pinned byte count and SHA-256 below.",
+    "archiveURL": "https://github.com/akshatcoder-hash/private-computer-use-agent/releases/download/atom-v1/atom-tinyclick-4bit-v1.tar.gz",
+    "archiveBytes": 149270950,
+    "archiveSha256": "7461f7f077a346245f9b60c262a8bf3971b05bd4596469ac4e25bc5f604f2f18",
+    "archiveLicensePaths": ["licenses/atom/LICENSE", "licenses/atom/NOTICE.md"]
+  },
+  "files": [
+    {"path": "added_tokens.json", "bytes": 22410, "sha256": "ba67457c577895525996e7a42d7da60a05856506ea4fd25ff9a023a64662f74b"},
+    {"path": "config.json", "bytes": 60068, "sha256": "d554934505b94234fb10090e5662f4d05c8a562f6d2ddc1df0716fab084dad81"},
+    {"path": "generation_config.json", "bytes": 292, "sha256": "1fe65790b7fa2f8a128a7bfdb75abbc92ffa0a8deb85b8ca144a9e0a8985d419"},
+    {"path": "merges.txt", "bytes": 456318, "sha256": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5"},
+    {"path": "model.safetensors", "bytes": 163524711, "sha256": "c4632a244c9e8354417c2f44900d28886022971843b5ab5ce37e92227aef01ca"},
+    {"path": "model.safetensors.index.json", "bytes": 96965, "sha256": "3a5d577309a948bacd44141544167fd60d6dc7e8ad8825e0ec728fbce56369a1"},
+    {"path": "preprocessor_config.json", "bytes": 603, "sha256": "1396ec5a0a7adfe1c04fb777b09e8ba753be6dbb5868212ab3c3ef39d91fe031"},
+    {"path": "processing_florence2.py", "bytes": 46372, "sha256": "4bd7158536cbf1c7891fc8efd94437d79fd09f07f539c7398fab8a885d7d8bca"},
+    {"path": "processor_config.json", "bytes": 690, "sha256": "94002ab3c25c2647ff6459cd18da0dd895b2f531cf527da600e933bef670e383"},
+    {"path": "special_tokens_map.json", "bytes": 293616, "sha256": "dd36b37dcc4631496ad86624485f091ee55387ce7b6358957be2abe268f0ec80"},
+    {"path": "tokenizer.json", "bytes": 3748144, "sha256": "3ad7001f773409abe6bba33eac92662611a73d72f459bda2f00d2a221dd31ce4"},
+    {"path": "tokenizer_config.json", "bytes": 602, "sha256": "b7cd124ea3fee433482954f704ec73728e0e4a80635d58f7584ac4f0ba12e016"},
+    {"path": "vocab.json", "bytes": 798293, "sha256": "ed19656ea1707df69134c4af35c8ceda2cc9860bf2c3495026153a133670ab5e"}
+  ],
+  "license": "licenses/atom",
+  "hardware": {"arch": "arm64", "minFreeBytes": 400000000}
+}

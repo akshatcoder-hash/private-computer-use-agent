@@ -1,0 +1,7 @@
+mlx==0.32.2
+mlx-vlm==0.7.1
+mlx-metal==0.32.2
+transformers==5.17.0
+pillow==12.0.0
+torch==2.14.0
+torchvision==0.29.0
