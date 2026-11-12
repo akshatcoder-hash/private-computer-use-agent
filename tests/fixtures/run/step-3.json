@@ -1,0 +1,44 @@
+{
+  "step": 3,
+  "screenshot": {
+    "sha256": "0fbb82d92ffffd1d808dd65335406c95b7fe9eb256e8e10b6ba7db3495c91a52",
+    "width": 400,
+    "height": 300,
+    "bytes": 2330
+  },
+  "events": [
+    "step_started",
+    "planner_verified"
+  ],
+  "planner": {
+    "model": "Qwen/Qwen3.8-27B",
+    "completion_id": "5ab7084594564079b9939c270d4960bf",
+    "e2ee": true,
+    "latency_ms": 1378,
+    "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
+    "action": {
+      "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
+      "action": "done",
+      "summary": "Settings were opened and changes saved, as confirmed by the 'Saved - changes saved' message on screen."
+    },
+    "usage": {
+      "prompt_tokens": 527,
+      "completion_tokens": 53,
+      "reasoning_tokens": 0
+    }
+  },
+  "verification": {
+    "verified": true,
+    "checked_before_acting": true,
+    "signature_kind": "provider_tee",
+    "signing_algo": "ed25519",
+    "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
+    "signer_matches_attested_model": true,
+    "signer_matches_attested_gateway": false,
+    "signed_text": "Qwen/Qwen3.8-27B:d3b737deac2e663b767368e1caccbcadbcc1f1f1c3d68c3b0c397ac42574c646:c37d49025d7b92fef109e1bb9e5d4e7a37948862be0d995ad57bf0a718d15ef4",
+    "signature": "7a8648f766b1e2565bd3d10d115be863115c8dd7930cc1c16ddb668ca489bafd48a97bcd1d92261ff9c8f2ed84340e9f0d7ce472cf9a95077825f551e5f82f08",
+    "request_sha256": "d3b737deac2e663b767368e1caccbcadbcc1f1f1c3d68c3b0c397ac42574c646",
+    "response_sha256": "c37d49025d7b92fef109e1bb9e5d4e7a37948862be0d995ad57bf0a718d15ef4"
+  },
+  "action_performed": "done"
+}

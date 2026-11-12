@@ -1,0 +1,57 @@
+{
+  "step": 2,
+  "screenshot": {
+    "sha256": "cfa69e39d30437b1ace71ebc5ae46f53a50f4e2528c617e3050b8ea04f5fd7c6",
+    "width": 400,
+    "height": 300,
+    "bytes": 2931
+  },
+  "events": [
+    "step_started",
+    "planner_verified",
+    "grounded",
+    "acted"
+  ],
+  "planner": {
+    "model": "Qwen/Qwen3.8-27B",
+    "completion_id": "bd44426c32d94f3a861a50591f848de2",
+    "e2ee": true,
+    "latency_ms": 1140,
+    "thought": "Settings/Preferences is open; click Save changes to save.",
+    "action": {
+      "thought": "Settings/Preferences is open; click Save changes to save.",
+      "action": "click",
+      "target": "the Save changes button"
+    },
+    "usage": {
+      "prompt_tokens": 501,
+      "completion_tokens": 32,
+      "reasoning_tokens": 0
+    }
+  },
+  "verification": {
+    "verified": true,
+    "checked_before_acting": true,
+    "signature_kind": "provider_tee",
+    "signing_algo": "ed25519",
+    "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
+    "signer_matches_attested_model": true,
+    "signer_matches_attested_gateway": false,
+    "signed_text": "Qwen/Qwen3.8-27B:f3e6d2b55eb5ad66d6d902ea389d9953a7c58055a0b5c090e5bfe36742c77751:e2290e19626bb01e36a0895d11883116f70689aa79f5257f8709ffffada21641",
+    "signature": "308c7c99ffe61e3fd72709a35f2b2f08b117e2d62f5bc5f640ad3b2e22fa4f23398e9574dee535759525326b9902f838ea308deac372f4fc1ee092147d477102",
+    "request_sha256": "f3e6d2b55eb5ad66d6d902ea389d9953a7c58055a0b5c090e5bfe36742c77751",
+    "response_sha256": "e2290e19626bb01e36a0895d11883116f70689aa79f5257f8709ffffada21641"
+  },
+  "grounding": {
+    "model": "Atom tinyclick-4bit-v1",
+    "where": "127.0.0.1:8760",
+    "instruction": "click the Save changes button",
+    "pixel": {
+      "x": 200,
+      "y": 150
+    },
+    "duration_ms": 1
+  },
+  "result": "clicked (200, 150)",
+  "action_performed": "click 'the Save changes button'"
+}

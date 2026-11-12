@@ -27,6 +27,6 @@ def check_atom_url(url: str) -> str:
         loopback = ip_address(host).is_loopback
     except ValueError:
         loopback = False  # names, including "localhost", can be re-pointed; require an IP literal
-    if parsed.scheme != "http" or not loopback:
+    if parsed.scheme != "http" or not loopback or parsed.username or parsed.password:
         raise EgressError(f"Atom must be a loopback IP address, not {url}")
     return url.rstrip("/")

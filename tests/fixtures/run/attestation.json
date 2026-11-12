@@ -1,0 +1,25 @@
+{
+  "verified_at": "2026-11-12T13:59:32Z",
+  "model_id": "Qwen/Qwen3.8-27B",
+  "e2ee": true,
+  "gateway": {
+    "tcb_status": "UpToDate",
+    "signing_algo": "ed25519",
+    "signer": "40599fb284f43953bb356b09080fd803c960fc10285ad90eca462ca711ad4acb",
+    "tls_binding": "attested",
+    "tls_spki_fingerprint": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad",
+    "compose_hash": "877959253d2406f05fa718840fd157b8e647547827e9524cb33081a2a8fcb78b",
+    "os_image_hash": "8db40cb23008d6213668b5816702d100b37b859a8a5bfd18d938ae3a1b3715bd"
+  },
+  "model": {
+    "tcb_status": "UpToDate",
+    "signing_algo": "ed25519",
+    "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
+    "gpu_evidence": "verified",
+    "compose_hash": "e8416a02d6f7ce47baaa52e3925b934fd30834b04fc9086b363db9b1d12c729d",
+    "os_image_hash": "91fd5d69ccee3e5ea4f2aeb8c9b632c4358c4ecfc29ba1aa6fb1e402af209829"
+  },
+  "model_signers": [
+    "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93"
+  ]
+}
