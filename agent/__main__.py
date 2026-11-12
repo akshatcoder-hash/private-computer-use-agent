@@ -37,14 +37,20 @@ def cmd_run(args) -> int:
         print(f"Atom check failed: {error}", file=sys.stderr)
         return 2
 
-    run = Run(args.receipts_dir)
     browser = WorkBrowser(args.start_url) if args.start_url and not args.no_browser else None
+    work_pid = browser.pid if browser else args.work_pid
+    if work_pid is None:
+        print("Cannot tell which window the agent owns: pass --start-url (the agent opens its own browser) "
+              "or --work-pid <pid of the work browser>.", file=sys.stderr)
+        return 2
+    allow = screen.allowed_overlays_from_env() | frozenset(args.allow_overlay or [])
+    run = Run(args.receipts_dir)
 
     async def go():
         async with Planner(key, args.model, e2ee=not args.no_e2ee,
                            allow_gateway_signature=args.allow_gateway_signature) as planner:
             return await run_task(args.task, planner, run, start_url=args.start_url, max_steps=args.max_steps,
-                                  keep_screenshots=args.keep_screenshots)
+                                  keep_screenshots=args.keep_screenshots, work_pid=work_pid, allow_overlays=allow)
     try:
         if browser:
             browser.wait_ready()
@@ -55,6 +61,15 @@ def cmd_run(args) -> int:
     print(f"\n{result.status}: {result.summary}  ({result.steps} step(s), "
           f"{result.prompt_tokens} prompt + {result.completion_tokens} completion tokens)\nreceipt: {result.run_dir}")
     return 0 if result.status == "done" else 1
+
+
+def cmd_guard(args) -> int:
+    """Exit 0 if the work window is on top and focused; print the reason and exit 1 otherwise."""
+    from . import screen
+    allow = screen.allowed_overlays_from_env() | frozenset(args.allow_overlay or [])
+    reason = screen.guard_region(screen.Region.parse(args.region), args.pid, allow) or screen.guard_keyboard(args.pid)
+    print(reason or "ok")
+    return 0 if reason is None else 1
 
 
 def cmd_verify(args) -> int:
@@ -76,7 +91,14 @@ def main() -> int:
     run.add_argument("--allow-gateway-signature", action="store_true",
                      help="accept a gateway signature instead of the model enclave's (weaker; off by default)")
     run.add_argument("--no-e2ee", action="store_true", help="turn end-to-end encryption to the model off")
+    run.add_argument("--work-pid", type=int, help="pid of the work browser (with --no-browser); the agent only captures and acts while its window is on top")
+    run.add_argument("--allow-overlay", action="append", metavar="APP", help="ignore this app's invisible overlay window (repeatable; also AGENT_ALLOW_OVERLAYS=a,b)")
     run.set_defaults(func=cmd_run)
+    guard = sub.add_parser("guard", help="check that the work window (pid) is on top and focused")
+    guard.add_argument("--pid", type=int, required=True)
+    guard.add_argument("--region", default="0,0,1400,1080")
+    guard.add_argument("--allow-overlay", action="append", metavar="APP")
+    guard.set_defaults(func=cmd_guard)
     verify = sub.add_parser("verify", help="check a run's receipt offline")
     verify.add_argument("run_dir")
     verify.set_defaults(func=cmd_verify)

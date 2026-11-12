@@ -30,6 +30,11 @@ class WorkBrowser:
              "--window-position=0,0", f"--window-size={width},{height}", f"--app={url}"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    @property
+    def pid(self) -> int:
+        """The browser's main process: the owner of its windows in CGWindowList."""
+        return self._proc.pid
+
     def wait_ready(self, seconds: float = 2.5):
         time.sleep(seconds)
         # Bring our own window to the front: macOS does not always focus a process started from a terminal.

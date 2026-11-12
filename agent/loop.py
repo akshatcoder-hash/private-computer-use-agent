@@ -24,6 +24,47 @@ class Result:
     completion_tokens: int = 0
 
 
+class GuardBlocked(Exception):
+    def __init__(self, what: str, reason: str):
+        super().__init__(reason)
+        self.what, self.reason = what, reason
+
+
+class Guard:
+    """Fail-closed checks that the work window, owned by work_pid, is what the agent sees and touches."""
+
+    def __init__(self, work_pid: int, region: screen.Region, allow: frozenset[str] | None = None):
+        self.pid, self.region, self.allow = work_pid, region, allow
+
+    def check_region(self):
+        return screen.guard_region(self.region, self.pid, self.allow)
+
+    def check_point(self, x, y):
+        return screen.guard_point(x, y, self.pid, self.allow)
+
+    def check_keys(self):
+        return screen.guard_keyboard(self.pid)
+
+    def passes(self, what: str, check) -> None:
+        """Run check; on failure bring the work window to the front once, wait, re-check; raise if still failing."""
+        reason = check()
+        if reason is None:
+            return
+        screen.bring_to_front(self.pid)
+        time.sleep(0.5)
+        reason = check()
+        if reason is not None:
+            raise GuardBlocked(what, reason)
+
+    def strict(self, what: str, check):
+        """A callable for the instant before an event is posted: no retry, raises if the check fails."""
+        def go():
+            reason = check()
+            if reason is not None:
+                raise GuardBlocked(what, reason)
+        return go
+
+
 def _png_size(png: bytes) -> tuple[int, int]:
     return int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
 
@@ -50,7 +91,7 @@ def _ground(target: str, png: bytes, step: int, run: Run) -> dict | str:
     return last
 
 
-def _act(action: dict, png: bytes, step: int, run: Run, region: screen.Region) -> str:
+def _act(action: dict, png: bytes, step: int, run: Run, region: screen.Region, guard: Guard) -> str:
     kind = action["action"]
     if kind == "click":
         found = _ground(action["target"], png, step, run)
@@ -59,18 +100,23 @@ def _act(action: dict, png: bytes, step: int, run: Run, region: screen.Region) -
         width, _ = _png_size(png)
         scale = found["image"]["width"] / region.width if found.get("image") else width / region.width
         x, y = region.x + found["pixel"]["x"] / scale, region.y + found["pixel"]["y"] / scale
-        screen.click(x, y)
+        guard.passes("click", lambda: guard.check_point(x, y))
+        screen.click(x, y, before_press=guard.strict("click", lambda: guard.check_point(x, y)))
         return f"clicked ({round(x)}, {round(y)})"
     if kind == "type":
-        screen.type_text(action["text"])
+        guard.passes("type", guard.check_keys)
+        screen.type_text(action["text"], before_each=guard.strict("type", guard.check_keys))
         if action.get("enter"):
-            screen.press("enter")
+            screen.press("enter", before=guard.strict("type", guard.check_keys))
         return f"typed {len(action['text'])} characters" + (" and pressed enter" if action.get("enter") else "")
     if kind == "key":
-        screen.press(action["key"])
+        guard.passes("key", guard.check_keys)
+        screen.press(action["key"], before=guard.strict("key", guard.check_keys))
         return f"pressed {action['key']}"
     if kind == "scroll":
-        screen.scroll(action["direction"], region.x + region.width / 2, region.y + region.height / 2)
+        sx, sy = region.x + region.width / 2, region.y + region.height / 2
+        guard.passes("scroll", lambda: guard.check_point(sx, sy))
+        screen.scroll(action["direction"], sx, sy)
         return f"scrolled {action['direction']}"
     if kind == "wait":
         time.sleep(1.5)
@@ -86,10 +132,12 @@ def _describe(action: dict) -> str:
 
 
 async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | None = None, max_steps: int = 12,
-                   keep_screenshots: bool = False, region: screen.Region = WORK_AREA, log=print) -> Result:
+                   keep_screenshots: bool = False, region: screen.Region = WORK_AREA, work_pid: int,
+                   allow_overlays: frozenset[str] | None = None, log=print) -> Result:
     run.event("run_started", run_id=run.run_id, task=task, model=planner.model, e2ee=planner.e2ee,
               start_url=start_url, allow_gateway_signature=planner.allow_gateway)
     totals = {"prompt": 0, "completion": 0}
+    guard = Guard(work_pid, region, allow_overlays)
 
     def finish(status: str, summary: str, steps: int) -> Result:
         run.event("run_finished", status=status, summary=summary, steps=steps)
@@ -103,13 +151,23 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
     run.write_attestation(attestation)
     run.event("attestation", attestation={k: v for k, v in attestation.items() if k not in ("model_id", "e2ee", "model_signers")})
 
+    def stopped_by_guard(blocked: GuardBlocked, step: int) -> Result:
+        run.event("guard_blocked", step, action=blocked.what, reason=blocked.reason)
+        log(f"step {step}: GUARD, stopping before {blocked.what}: work window not in front: {blocked.reason}")
+        return finish("stopped", f"work window not in front: {blocked.reason}", step)
+
     history: list[str] = []
     previous_hash = None
     previous_action = ""
     for step in range(1, max_steps + 1):
         if step > 1:
             time.sleep(SETTLE_SECONDS)
-        png = screen.capture(region)
+        try:
+            guard.passes("capture", guard.check_region)
+            png = screen.capture(region)
+            guard.strict("capture", guard.check_region)()  # covered while capturing: discard, nothing was sent
+        except GuardBlocked as blocked:
+            return stopped_by_guard(blocked, step)
         digest = sha256_hex(png)
         width, height = _png_size(png)
         run.event("step_started", step, screenshot={"sha256": digest, "width": width, "height": height, "bytes": len(png)})
@@ -144,7 +202,11 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
             run.update_step(step, action_performed="fail")
             return finish("failed", action.get("reason", ""), step)
 
-        result = _act(action, png, step, run, region)
+        try:
+            result = _act(action, png, step, run, region, guard)
+        except GuardBlocked as blocked:
+            run.update_step(step, action_performed="blocked")
+            return stopped_by_guard(blocked, step)
         run.event("acted", step, result=result)
         run.update_step(step, action_performed=_describe(action))
         log(f"step {step}: {result}")

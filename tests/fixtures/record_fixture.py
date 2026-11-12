@@ -36,7 +36,9 @@ def page(title: str, button: str | None) -> bytes:
 PAGES = iter([page("Account Home", "Settings"), page("Preferences", "Save changes"), page("Saved - changes saved", None),
               page("Saved - changes saved", None)])
 screen.capture = lambda region: next(PAGES)
-screen.click = lambda x, y: None
+screen.click = lambda x, y, before_press=None: None
+screen.guard_region = lambda *a, **k: None
+screen.guard_point = lambda *a, **k: None
 grounder.ground = lambda instruction, png: {"action": "click", "pixel": {"x": 200, "y": 150}, "image": {"width": 400, "height": 300}, "duration_ms": 1}
 loop.SETTLE_SECONDS = 0
 
@@ -58,7 +60,7 @@ async def main():
 
         planner.plan = plan
         run.write_wire = lambda step, req, resp, reply_key=None: real_write(step, req, resp, reply_key or last.get("key"))
-        result = await loop.run_task("Open Settings and save the changes", planner, run, region=screen.Region(0, 0, 400, 300))
+        result = await loop.run_task("Open Settings and save the changes", planner, run, region=screen.Region(0, 0, 400, 300), work_pid=0)
     print(result)
 
 asyncio.run(main())

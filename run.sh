@@ -130,21 +130,22 @@ sleep 2
 open_window work 0 0 1400 1080 "$START_URL"; WORK_WIN=$LAST_PID
 sleep 2.5
 # The agent clicks and types on whatever is on screen: refuse to start unless our own work window is in front.
-is_front() { [[ "$(osascript -e 'tell application "System Events" to get unix id of first process whose frontmost is true' 2>/dev/null)" == "$1" ]]; }
+# Same function the agent uses before every capture and action (agent/screen.py): our window covers the work area and has focus.
+is_front() { GUARD_WHY="$(uv run python -m agent guard --pid "$1" --region 0,0,1400,1080 2>&1)"; }
 FRONT_OK=0
 for _ in 1 2 3 4 5 6; do
   kill -0 "$WORK_WIN" 2>/dev/null || die "the work-area browser exited right after starting ($BROWSER_BIN)."
   front "$WORK_WIN"; sleep 0.8
   if is_front "$WORK_WIN"; then FRONT_OK=1; break; fi
 done
-[[ $FRONT_OK -eq 1 ]] || die "could not bring the work-area browser to the front (another app keeps focus), so nothing was run. Close or minimise other windows and try again."
+[[ $FRONT_OK -eq 1 ]] || die "could not bring the work-area browser to the front (${GUARD_WHY:-unknown reason}), so nothing was run. Close or minimise other windows and try again."
 echo "windows: panel at 1400,0 (520x1080); work area at 0,0 (1400x1080) on $START_URL"
 echo "downloads from the work-area browser land in: $DOWNLOADS (temporary; removed on exit)"
 
 # 8. Run
 LOG="$TMP/agent.log"
 echo
-PYTHONUNBUFFERED=1 uv run python -m agent run "$TASK" --no-browser --start-url "$START_URL" --receipts-dir receipts ${EXTRA[@]+"${EXTRA[@]}"} 2>&1 | tee "$LOG"
+PYTHONUNBUFFERED=1 uv run python -m agent run "$TASK" --no-browser --work-pid "$WORK_WIN" --start-url "$START_URL" --receipts-dir receipts ${EXTRA[@]+"${EXTRA[@]}"} 2>&1 | tee "$LOG"
 RC=${PIPESTATUS[0]}
 
 # 9. Report

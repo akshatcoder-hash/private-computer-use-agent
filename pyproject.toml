@@ -6,5 +6,6 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "nearai-inference-sdk==0.3.0",
     "pillow>=11",
+    "pyobjc-framework-Cocoa>=11; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=11; sys_platform == 'darwin'",
 ]
