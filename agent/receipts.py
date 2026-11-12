@@ -45,10 +45,15 @@ class Run:
     def write_attestation(self, attestation: dict):
         self._write_json("attestation.json", attestation)
 
-    def write_wire(self, step: int, request: bytes, response: bytes):
+    def write_wire(self, step: int, request: bytes, response: bytes, reply_key: str | None = None):
         for suffix, data in (("request", request), ("response", response)):
             with open(self._path(f"step-{step}.{suffix}.bin"), "wb") as stream:
                 stream.write(data)
+        if reply_key:
+            # Decrypts only the planner's reply to this one request. The screenshot was encrypted to the
+            # model's attested key, which we never hold, so this cannot reveal it. See agent/planner.py.
+            with open(self._path(f"step-{step}.reply_key.hex"), "w") as stream:
+                stream.write(reply_key + "\n")
 
     def write_screenshot(self, step: int, png: bytes):
         with open(self._path(f"step-{step}.png"), "wb") as stream:

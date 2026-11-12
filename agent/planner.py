@@ -11,6 +11,8 @@ import time
 from dataclasses import dataclass, field
 
 from nearai_inference_sdk import InferenceClient
+from nearai_inference_sdk.core import e2ee as _sdk_e2ee
+from nearai_inference_sdk.core import e2ee_request as _sdk_e2ee_request
 
 from .egress import PLANNER_BASE_URL, check_planner_url
 
@@ -61,6 +63,74 @@ ACTION_SCHEMA = {
 }
 
 REQUIRED_FIELD = {"click": "target", "type": "text", "key": "key", "scroll": "direction", "done": "summary", "fail": "reason"}
+
+
+# ---------------------------------------------------------------------------------------------
+# Reply key capture.
+#
+# Under E2EE the SDK makes a fresh "reply" keypair for every request (e2ee_request.py
+# prepare_e2ee_chat_request calls create_e2ee_client_key_pair) and closes over the private half;
+# no public API returns it. This is the ONE place we touch SDK internals: we wrap the module-level
+# name `create_e2ee_client_key_pair` as imported into e2ee_request, and record every key it makes.
+# If the SDK is restructured, install fails loudly here instead of silently dropping the key.
+#
+# Why storing it in a receipt is safe: the reply key can only decrypt the RESPONSE fields (planner
+# reply). The request, including the screenshot (messages[].content), is encrypted by
+# encrypt_e2ee_text to the model's attested public key using a throwaway ephemeral secret that is
+# never kept (e2ee.py encrypt_e2ee_text); the client never holds the model's private key. The
+# client's public reply key only travels in a header and in the AAD. So the receipt still cannot
+# reveal the screenshot or the prompt, but it lets anyone decrypt the signed reply and check that
+# the recorded action is what the enclave produced.
+# ---------------------------------------------------------------------------------------------
+_CAPTURED_KEYS: list = []
+_PATCHED = False
+
+
+def install_reply_key_capture() -> None:
+    global _PATCHED
+    if _PATCHED:
+        return
+    original = getattr(_sdk_e2ee_request, "create_e2ee_client_key_pair", None)
+    if original is None or not hasattr(_sdk_e2ee, "decrypt_e2ee_text"):
+        raise RuntimeError("nearai_inference_sdk changed: cannot capture the E2EE reply key "
+                           "(core.e2ee_request.create_e2ee_client_key_pair is gone); update agent/planner.py")
+
+    def capturing(*args, **kwargs):
+        pair = original(*args, **kwargs)
+        _CAPTURED_KEYS.append(pair)
+        return pair
+
+    _sdk_e2ee_request.create_e2ee_client_key_pair = capturing
+    _PATCHED = True
+
+
+def serialize_reply_key(pair) -> str:
+    """'<algo>:<hex secret>' for a Ed25519/Ecdsa E2eeClientKeyPair."""
+    if pair.signing_algo == "ed25519":
+        return "ed25519:" + bytes(pair.x25519_secret_key).hex()
+    if pair.signing_algo == "ecdsa":
+        return "ecdsa:" + pair.private_key.private_numbers().private_value.to_bytes(32, "big").hex()
+    raise RuntimeError(f"unknown reply key algo {pair.signing_algo!r}")
+
+
+def load_reply_key(text: str):
+    algo, _, secret = text.strip().partition(":")
+    raw = bytes.fromhex(secret)
+    if algo == "ed25519":
+        return _sdk_e2ee.Ed25519E2eeClientKeyPair(public_key="", x25519_secret_key=raw)
+    if algo == "ecdsa":
+        from cryptography.hazmat.primitives.asymmetric import ec
+        key = ec.derive_private_key(int.from_bytes(raw, "big"), ec.SECP256K1())
+        return _sdk_e2ee.EcdsaE2eeClientKeyPair(public_key="", private_key=key)
+    raise ValueError(f"unknown reply key algo {algo!r}")
+
+
+def action_from_wire(response_bytes: bytes, reply_key_text: str) -> dict:
+    """Decrypt a recorded E2EE response with the SDK's own code and parse the action as the planner does."""
+    from nearai_inference_sdk.core.e2ee_chat import decrypt_e2ee_chat_response, parse_e2ee_chat_response
+    body = parse_e2ee_chat_response(json.loads(response_bytes.decode("utf-8")))
+    decrypted = decrypt_e2ee_chat_response(body, load_reply_key(reply_key_text))
+    return parse_action(decrypted["choices"][0]["message"].get("content") or "")
 
 
 class PlannerUnverified(RuntimeError):
@@ -136,6 +206,7 @@ class PlanResult:
     response_bytes: bytes
     verification: dict
     usage: dict = field(default_factory=dict)
+    reply_key: str | None = None  # decrypts only this reply; see the note above
 
 
 class Planner:
@@ -152,6 +223,7 @@ class Planner:
         self._gateway_signer: str = ""
 
     async def __aenter__(self):
+        install_reply_key_capture()
         self._client = InferenceClient(self._api_key, e2ee=self.e2ee)
         await self._client.__aenter__()
         return self
@@ -191,6 +263,7 @@ class Planner:
         if self.attestation is None:
             raise PlannerUnverified("planner attestation was not verified before the call")
         started = time.monotonic()
+        _CAPTURED_KEYS.clear()
         try:
             completion = await self._client.chat.completions.create(
                 model=self.model,
@@ -218,6 +291,11 @@ class Planner:
         except Exception as error:
             raise PlannerUnverified(f"signature verification failed: {type(error).__name__}: {error}") from error
         verification = self._check(verified, request_bytes, response_bytes)
+        reply_key = None
+        if self.e2ee:
+            if len(_CAPTURED_KEYS) != 1:
+                raise PlannerUnverified(f"expected exactly one E2EE reply key for this call, saw {len(_CAPTURED_KEYS)}")
+            reply_key = serialize_reply_key(_CAPTURED_KEYS[0])
 
         message = completion.choices[0].message
         try:
@@ -234,6 +312,7 @@ class Planner:
             request_bytes=request_bytes,
             response_bytes=response_bytes,
             verification=verification,
+            reply_key=reply_key,
             usage={"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens,
                    "reasoning_tokens": getattr(usage, "reasoning_tokens", None)} if usage else {},
         )

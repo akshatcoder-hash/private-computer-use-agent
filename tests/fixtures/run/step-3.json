@@ -8,22 +8,26 @@
   },
   "events": [
     "step_started",
+    "screenshot_sent",
     "planner_verified"
   ],
+  "to": "near-enclave",
+  "host": "cloud-api.near.ai",
+  "bytes": 2330,
   "planner": {
     "model": "Qwen/Qwen3.8-27B",
-    "completion_id": "5ab7084594564079b9939c270d4960bf",
+    "completion_id": "dcf7c0d5b02c4fb296faad5fbc2a1a63",
     "e2ee": true,
-    "latency_ms": 1378,
-    "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
+    "latency_ms": 1497,
+    "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully. The goal is complete.",
     "action": {
-      "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
+      "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully. The goal is complete.",
       "action": "done",
-      "summary": "Settings were opened and changes saved, as confirmed by the 'Saved - changes saved' message on screen."
+      "summary": "The screen displays 'Saved - changes saved', confirming the settings changes were saved successfully."
     },
     "usage": {
       "prompt_tokens": 527,
-      "completion_tokens": 53,
+      "completion_tokens": 54,
       "reasoning_tokens": 0
     }
   },
@@ -35,10 +39,10 @@
     "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
     "signer_matches_attested_model": true,
     "signer_matches_attested_gateway": false,
-    "signed_text": "Qwen/Qwen3.8-27B:d3b737deac2e663b767368e1caccbcadbcc1f1f1c3d68c3b0c397ac42574c646:c37d49025d7b92fef109e1bb9e5d4e7a37948862be0d995ad57bf0a718d15ef4",
-    "signature": "7a8648f766b1e2565bd3d10d115be863115c8dd7930cc1c16ddb668ca489bafd48a97bcd1d92261ff9c8f2ed84340e9f0d7ce472cf9a95077825f551e5f82f08",
-    "request_sha256": "d3b737deac2e663b767368e1caccbcadbcc1f1f1c3d68c3b0c397ac42574c646",
-    "response_sha256": "c37d49025d7b92fef109e1bb9e5d4e7a37948862be0d995ad57bf0a718d15ef4"
+    "signed_text": "Qwen/Qwen3.8-27B:3f4324b765fa414804db5144bb14ed8c1edbf1aec959ed7b021a033c737a24a7:4efa07c8f430e6234da0f264e2e1ac72925f4540bd185b47ebe16197092935bb",
+    "signature": "15dbfd704763442a8c85d5c113b1ad96cab4912048a5492e79a32a72ee0d900925b10a81118b445622987ca1781f1de8d423baa10eda4be976aff7f3ac65de08",
+    "request_sha256": "3f4324b765fa414804db5144bb14ed8c1edbf1aec959ed7b021a033c737a24a7",
+    "response_sha256": "4efa07c8f430e6234da0f264e2e1ac72925f4540bd185b47ebe16197092935bb"
   },
   "action_performed": "done"
 }

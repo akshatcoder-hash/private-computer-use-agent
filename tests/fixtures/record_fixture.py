@@ -47,6 +47,17 @@ shutil.rmtree(target, ignore_errors=True)
 async def main():
     run = Run(os.path.dirname(target), "run")
     async with Planner(load_key()) as planner:
+        # Until loop.py passes plan.reply_key to write_wire itself, hand the key over from here.
+        real_plan, real_write = planner.plan, run.write_wire
+        last = {}
+
+        async def plan(*args, **kwargs):
+            result = await real_plan(*args, **kwargs)
+            last["key"] = result.reply_key
+            return result
+
+        planner.plan = plan
+        run.write_wire = lambda step, req, resp, reply_key=None: real_write(step, req, resp, reply_key or last.get("key"))
         result = await loop.run_task("Open Settings and save the changes", planner, run, region=screen.Region(0, 0, 400, 300))
     print(result)
 

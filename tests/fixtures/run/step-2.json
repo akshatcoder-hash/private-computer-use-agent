@@ -8,24 +8,29 @@
   },
   "events": [
     "step_started",
+    "screenshot_sent",
     "planner_verified",
+    "screenshot_sent",
     "grounded",
     "acted"
   ],
+  "to": "atom-local",
+  "host": "127.0.0.1:8760",
+  "bytes": 2931,
   "planner": {
     "model": "Qwen/Qwen3.8-27B",
-    "completion_id": "bd44426c32d94f3a861a50591f848de2",
+    "completion_id": "719b1b97df374138975c7195449518db",
     "e2ee": true,
-    "latency_ms": 1140,
-    "thought": "Settings/Preferences is open; click Save changes to save.",
+    "latency_ms": 1053,
+    "thought": "Settings/Preferences is open; I need to save the changes by clicking the Save changes button.",
     "action": {
-      "thought": "Settings/Preferences is open; click Save changes to save.",
+      "thought": "Settings/Preferences is open; I need to save the changes by clicking the Save changes button.",
       "action": "click",
       "target": "the Save changes button"
     },
     "usage": {
       "prompt_tokens": 501,
-      "completion_tokens": 32,
+      "completion_tokens": 39,
       "reasoning_tokens": 0
     }
   },
@@ -37,10 +42,10 @@
     "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
     "signer_matches_attested_model": true,
     "signer_matches_attested_gateway": false,
-    "signed_text": "Qwen/Qwen3.8-27B:f3e6d2b55eb5ad66d6d902ea389d9953a7c58055a0b5c090e5bfe36742c77751:e2290e19626bb01e36a0895d11883116f70689aa79f5257f8709ffffada21641",
-    "signature": "308c7c99ffe61e3fd72709a35f2b2f08b117e2d62f5bc5f640ad3b2e22fa4f23398e9574dee535759525326b9902f838ea308deac372f4fc1ee092147d477102",
-    "request_sha256": "f3e6d2b55eb5ad66d6d902ea389d9953a7c58055a0b5c090e5bfe36742c77751",
-    "response_sha256": "e2290e19626bb01e36a0895d11883116f70689aa79f5257f8709ffffada21641"
+    "signed_text": "Qwen/Qwen3.8-27B:1d3e6626f34eaeee350a9184d26ebaa9f106a7f636bf3ac46d8f82fcd49c1365:c2c9d4b0b7d56c305e665e4882271aeb7e8cc7d3b14b601d344085fef588c699",
+    "signature": "f4a8d82f5bc69f8f2ad2eb8c15f61969753261febf88f6af8137dbcf8383f50194aa5318e617f52b2dc49ab4e3c00eabe4c116c1bb8d64f4b1bbd5dd4f50980a",
+    "request_sha256": "1d3e6626f34eaeee350a9184d26ebaa9f106a7f636bf3ac46d8f82fcd49c1365",
+    "response_sha256": "c2c9d4b0b7d56c305e665e4882271aeb7e8cc7d3b14b601d344085fef588c699"
   },
   "grounding": {
     "model": "Atom tinyclick-4bit-v1",

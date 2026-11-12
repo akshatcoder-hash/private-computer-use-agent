@@ -121,6 +121,56 @@ class VerifyRun(unittest.TestCase):
         ok, text = self.verify()
         self.assertFalse(ok)
 
+    def test_edited_action_fails(self):
+        def edit(step):
+            step["planner"]["action"]["target"] = "the Delete account button"
+        self.edit_json("step-1.json", edit)
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("recorded action differs", text)
+
+    def test_edited_action_type_fails(self):
+        self.edit_json("step-3.json", lambda s: s["planner"]["action"].update(action="fail", reason="x"))
+        ok, text = self.verify()
+        self.assertFalse(ok)
+
+    def test_swapped_reply_key_fails(self):
+        shutil.copy(os.path.join(self.dir, "step-2.reply_key.hex"), os.path.join(self.dir, "step-1.reply_key.hex"))
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("cannot decrypt", text)
+
+    def test_garbage_reply_key_fails(self):
+        with open(os.path.join(self.dir, "step-1.reply_key.hex"), "w") as stream:
+            stream.write("ed25519:zz")
+        ok, text = self.verify()
+        self.assertFalse(ok)
+
+    def test_old_receipt_without_key_is_labelled_not_bound(self):
+        for n in (1, 2, 3):
+            os.remove(os.path.join(self.dir, f"step-{n}.reply_key.hex"))
+        ok, text = self.verify()
+        self.assertTrue(ok, text)
+        self.assertIn("not bound", text)
+
+    def test_fixture_reports_action_bound(self):
+        ok, text = self.verify()
+        self.assertNotIn("not bound", text)
+
+    def test_reply_key_cannot_decrypt_the_request(self):
+        """Safety claim: the stored key decrypts only the reply; the screenshot in the request stays sealed."""
+        from nearai_inference_sdk.core.e2ee import decrypt_e2ee_text
+        from agent.planner import load_reply_key
+        with open(os.path.join(self.dir, "step-1.request.bin"), "rb") as stream:
+            body = json.load(stream)
+        with open(os.path.join(self.dir, "step-1.reply_key.hex")) as stream:
+            key = load_reply_key(stream.read())
+        content = body["messages"][1]["content"]
+        self.assertIsInstance(content, str)
+        self.assertNotIn("data:image", content)
+        with self.assertRaises(Exception):
+            decrypt_e2ee_text(content, key, "messages[].content")
+
 
 if __name__ == "__main__":
     unittest.main()

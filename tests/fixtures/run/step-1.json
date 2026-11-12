@@ -8,15 +8,20 @@
   },
   "events": [
     "step_started",
+    "screenshot_sent",
     "planner_verified",
+    "screenshot_sent",
     "grounded",
     "acted"
   ],
+  "to": "atom-local",
+  "host": "127.0.0.1:8760",
+  "bytes": 2797,
   "planner": {
     "model": "Qwen/Qwen3.8-27B",
-    "completion_id": "512dfdd4b5624af880599f0ae8e56ea0",
+    "completion_id": "2274f8f6239a486b88ecc197ca69db44",
     "e2ee": true,
-    "latency_ms": 1160,
+    "latency_ms": 1590,
     "thought": "I need to open Settings first, so I'll click the Settings button.",
     "action": {
       "thought": "I need to open Settings first, so I'll click the Settings button.",
@@ -37,10 +42,10 @@
     "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
     "signer_matches_attested_model": true,
     "signer_matches_attested_gateway": false,
-    "signed_text": "Qwen/Qwen3.8-27B:e52397a019dcb5354ac7315e7af364e1f3741b4c2ab7f714e33076fbb42cca5c:def6ca2d6d86d28be2c60d731826eaa41630a8e098b082bfa3f4ab5a9a8b9891",
-    "signature": "65c554f51288701bd7dacb6c4f7eed879befb7bedd19ea9c6cc63e55994080d1eaad7684b6318bffc37d19d3fde810e03c3ccd9f53550506a49cb9acd4dd3900",
-    "request_sha256": "e52397a019dcb5354ac7315e7af364e1f3741b4c2ab7f714e33076fbb42cca5c",
-    "response_sha256": "def6ca2d6d86d28be2c60d731826eaa41630a8e098b082bfa3f4ab5a9a8b9891"
+    "signed_text": "Qwen/Qwen3.8-27B:aff6aa5e4259c54797bbd683d24c746936ccbda011c05e09de710cb78fa55eb8:470ad53e9fd02ad2b3a0979fd55a5708d807e943df652e68a28852932d4449f7",
+    "signature": "a55d25990829525a70a4178d072254e6c70f43fb8161fe081ad9d3918bec00d099a945ec57f935776b85fb22759f27d31dad9b2b34c9ab3138a0707ca9529708",
+    "request_sha256": "aff6aa5e4259c54797bbd683d24c746936ccbda011c05e09de710cb78fa55eb8",
+    "response_sha256": "470ad53e9fd02ad2b3a0979fd55a5708d807e943df652e68a28852932d4449f7"
   },
   "grounding": {
     "model": "Atom tinyclick-4bit-v1",
