@@ -115,3 +115,12 @@ class PointTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BringToFrontIsBestEffort(unittest.TestCase):
+    def test_slow_system_events_does_not_raise(self):
+        import subprocess
+        from unittest import mock
+        from agent import screen
+        with mock.patch.object(screen.subprocess, "run", side_effect=subprocess.TimeoutExpired("osascript", 5)):
+            screen.bring_to_front(123)  # must not raise; the guard re-check decides

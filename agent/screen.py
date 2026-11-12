@@ -205,8 +205,13 @@ def guard_keyboard(work_pid: int, region: Region, allow: frozenset[str] | None =
 
 
 def bring_to_front(pid: int):
-    subprocess.run(["osascript", "-e", f'tell application "System Events" to set frontmost of (first process whose unix id is {int(pid)}) to true'],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    """Best effort. A slow or failing System Events is not an error here: the caller re-runs the guard
+    check afterwards, and that check, not this call, decides whether the agent may continue."""
+    try:
+        subprocess.run(["osascript", "-e", f'tell application "System Events" to set frontmost of (first process whose unix id is {int(pid)}) to true'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
 
 
 def capture(region: Region) -> bytes:

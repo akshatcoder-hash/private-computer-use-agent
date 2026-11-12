@@ -159,14 +159,12 @@ Useful flags: `--max-steps`, `--keep-screenshots`, `--allow-gateway-signature`, 
 
 ## Results
 
-Three tasks, five consecutive passing runs each, on one Apple M4 Mac: the hero task (download the October statement as PDF from the mock bank), a $250 transfer on the same bank, and a Wikipedia search that opens the article. Success was judged outside the agent (the bank's event log, the browser's final URL), and every run also passed `verify`.
+Three tasks, five consecutive passing runs each, on one Apple M4 Mac: the hero task (download the October statement as PDF from the mock bank), a $250 transfer on the same bank, and a Wikipedia search that opens the article. Success was judged outside the agent (the bank's event log, the browser's final URL), and every run also passed `verify` with the default (strict) verifier.
 
-- Median planner latency per step: 1.68 s (hero), 1.23 s (transfer), 1.53 s (Wikipedia).
-- Median Atom latency per click: 0.40 s, 0.37 s, 0.48 s.
+- Median planner latency per step: 8.19 s (hero), 7.33 s (transfer), 6.52 s (Wikipedia). Steps are 4, 8 and 3; median wall time per run is 75 s, 113 s and 43 s.
+- Median Atom latency per click: 0.43 s, 0.43 s, 0.51 s.
 
-This is 5 consecutive runs per task on one machine, not a pass rate. One early transfer run failed before the final prompt; the full list of runs, failures and what is not verified is in [docs/RUNS.md](docs/RUNS.md).
-
-Being re-measured with the current verifier; see docs/RUNS.md.
+This is 5 consecutive runs per task on one machine, not a pass rate. In these runs one transfer run crashed on a timed-out `osascript` call, and three hero runs were stopped by the window guard when a notification banner came forward (those did not count toward the streaks). Planner latency was 4 to 5 times higher than in an earlier measurement, for a reason that was not investigated. The full list of runs, failures and what is not verified is in [docs/RUNS.md](docs/RUNS.md).
 
 ## Limits
 
