@@ -7,7 +7,8 @@ It runs entirely on your Mac; the screenshot is never sent anywhere.
 What it is, stated plainly:
 
 - A 4-bit quantized deployment of Samsung TinyClick (Florence-2-base lineage),
-  about 0.27B parameters, a 169 MB package.
+  about 0.27B parameters; the download is about 149 MB compressed and
+  169 MB installed.
 - It carries no additional gradient updates beyond the upstream weights.
 - 75.9% on ScreenSpot v2 (966 of 1,272 items). This is the author's own
   evaluation and is not on a public leaderboard. The evidence is at
