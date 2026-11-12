@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live receipt</title>
+<style>
+:root{
+  --bg:#07090c; --panel:#0e1217; --panel2:#141a21; --line:#232c36; --line2:#2f3a47;
+  --text:#f1f5f9; --mute:#a3b0bf; --dim:#7d8b9a;
+  --green:#3ddc97; --green-bg:rgba(61,220,151,.10);
+  --amber:#fbbf24; --amber-bg:rgba(251,191,36,.12);
+  --red:#ff5c5c; --red-bg:rgba(255,92,92,.14);
+  --blue:#6cb6ff;
+  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font:17px/1.35 var(--sans);overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh;width:100%;max-width:520px}
+.mono{font-family:var(--mono)}
+header{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:linear-gradient(#0b0f14,#07090c)}
+.top{display:flex;justify-content:space-between;align-items:center;font:600 13px var(--mono);letter-spacing:.14em;color:var(--mute);text-transform:uppercase}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:3px 10px;border-radius:99px;border:1px solid var(--line2);color:var(--mute)}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--dim)}
+.pill.live{color:var(--green);border-color:rgba(61,220,151,.5)} .pill.live i{background:var(--green);animation:pulse 1.2s infinite}
+.pill.done{color:var(--green);border-color:var(--green)} .pill.done i{background:var(--green)}
+.pill.bad{color:var(--red);border-color:var(--red)} .pill.bad i{background:var(--red)}
+.pill.warn{color:var(--amber);border-color:var(--amber)} .pill.warn i{background:var(--amber)}
+#task{font:700 26px/1.2 var(--sans);margin:8px 0 12px;letter-spacing:-.01em;overflow-wrap:anywhere}
+#task.idle{color:var(--mute);font-weight:600}
+.tally{display:grid;grid-template-columns:1fr 1fr 1.05fr;gap:8px}
+.t{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 12px 9px}
+.t b{display:block;font:700 40px/1 var(--mono);letter-spacing:-.03em}
+.t span{display:block;margin-top:5px;font:600 14.5px/1.2 var(--sans);color:var(--mute)}
+.t.ne b{color:var(--green)} .t.at b{color:var(--blue)}
+.t.zero{border:2px solid var(--green);background:var(--green-bg)}
+.t.zero b{font-size:52px;color:var(--green);margin-top:-4px}
+.t.zero span{color:var(--text)}
+.enc{margin-top:10px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 14px 6px}
+.enc h2{font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);display:flex;justify-content:space-between;padding-bottom:5px}
+.enc h2 em{font-style:normal;color:var(--green)}
+.er{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:4px 0;border-top:1px dashed var(--line);font-size:16.5px}
+.er .k{color:var(--mute);flex:0 1 auto}
+.er .v{font-weight:600;text-align:right;white-space:nowrap;font-family:var(--mono);font-size:16px}
+.ok{color:var(--green)} .wn{color:var(--amber)} .no{color:var(--red)}
+#scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 20px 18px;scroll-behavior:smooth}
+#scroll::-webkit-scrollbar{width:0}
+.wait{margin-top:60px;text-align:center;color:var(--mute);font-size:20px}
+.wait small{display:block;margin-top:8px;font-size:16px;color:var(--dim)}
+.step{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.step.cur{border-color:var(--line2);background:var(--panel2)}
+.step.bad{border:2px solid var(--red);background:var(--red-bg)}
+.sh{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;cursor:pointer}
+.sn{font:700 13px var(--mono);letter-spacing:.12em;color:var(--mute);padding:5px 8px;border:1px solid var(--line2);border-radius:6px;white-space:nowrap;margin-top:1px}
+.hd{flex:1;min-width:0;font:700 21px/1.25 var(--sans);overflow-wrap:anywhere}
+.hd.muted{color:var(--mute);font-weight:600}
+.chev{color:var(--dim);font-size:15px;margin-top:6px}
+.rows{padding:0 14px 8px}
+.row{display:grid;grid-template-columns:26px 1fr;gap:10px;padding:7px 0;border-top:1px dashed var(--line)}
+.ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:700 14px var(--sans);margin-top:1px;border:2px solid var(--dim);color:transparent}
+.row.done .ic{background:var(--green);border-color:var(--green);color:#04130c}
+.row.warn .ic{background:var(--amber);border-color:var(--amber);color:#1c1300}
+.row.bad .ic{background:var(--red);border-color:var(--red);color:#1d0000}
+.row.act .ic{border-color:var(--blue);animation:pulse 1.1s infinite}
+.rl{font-weight:650;font-size:18px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.rd{color:var(--mute);font-size:16px;overflow-wrap:anywhere}
+.rd.mono{font-size:15px}
+.chip{font:700 14px var(--mono);padding:2px 8px;border-radius:6px;border:1px solid var(--green);color:var(--green);background:var(--green-bg)}
+.chip.warn{border-color:var(--amber);color:var(--amber);background:var(--amber-bg)}
+.banner{padding:12px 14px;border-top:1px solid var(--red)}
+.banner b{display:block;font:800 22px/1.15 var(--sans);color:var(--red);letter-spacing:.01em}
+.banner p{margin-top:6px;font:15px/1.35 var(--mono);color:#ffd0d0;overflow-wrap:anywhere}
+.gwnote{margin:2px 0 4px;padding:8px 10px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);border-radius:8px;font-weight:650;font-size:16px}
+.thought{color:var(--mute);font-style:italic;font-size:16px}
+.rawbtn{margin:4px 0 6px;background:none;border:1px solid var(--line2);color:var(--mute);border-radius:6px;padding:4px 10px;font:600 14px var(--mono);cursor:pointer}
+pre.raw{margin:4px 0 8px;padding:10px;background:#05070a;border:1px solid var(--line);border-radius:8px;font:13.5px/1.4 var(--mono);color:#cfe3f5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow-y:auto}
+footer{display:none;padding:14px 20px 16px;border-top:2px solid var(--line2)}
+footer.show{display:block}
+footer b{display:block;font:800 26px/1.1 var(--sans);letter-spacing:.01em}
+footer p{margin-top:6px;font-size:17px;color:var(--text);overflow-wrap:anywhere}
+footer.done{background:var(--green-bg);border-color:var(--green)} footer.done b{color:var(--green)}
+footer.failed,footer.stopped.red{background:var(--red-bg);border-color:var(--red)} footer.failed b,footer.stopped.red b{color:var(--red)}
+footer.stopped{background:var(--amber-bg);border-color:var(--amber)} footer.stopped b{color:var(--amber)}
+footer.stopped.red b{color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="top"><span>Private agent / live receipt</span><span id="pill" class="pill"><i></i><span>idle</span></span></div>
+    <div id="task" class="idle">Waiting for a run</div>
+    <div class="tally">
+      <div class="t ne"><b id="n-ne">0</b><span>&rarr; NEAR enclave<br>(<span id="n-ver" style="display:inline;margin:0;font:inherit;color:inherit">0</span> verified)</span></div>
+      <div class="t at"><b id="n-at">0</b><span>&rarr; Atom on<br>this Mac</span></div>
+      <div class="t zero"><b>0</b><span>&rarr; anywhere else</span></div>
+    </div>
+    <div class="enc" id="enc"></div>
+  </header>
+  <main id="scroll"></main>
+  <footer id="foot"></footer>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const mid=(s,h=8,t=6)=>{s=String(s==null?"":s);return s.length>h+t+1?s.slice(0,h)+"…"+s.slice(-t):s};
+const num=v=>typeof v==="number"&&isFinite(v);
+function fresh(){return{idle:true,run:null,att:null,steps:new Map(),fin:null,ov:{},raw:{},rawText:{}}}
+let S=fresh();
+const els=new Map();
+
+function stepOf(n){if(!S.steps.has(n))S.steps.set(n,{n,t0:Date.now()});return S.steps.get(n)}
+function handle(ev){
+  if(!ev||typeof ev!=="object")return;
+  switch(ev.type){
+    case"_reset":S=fresh();S.idle=false;els.clear();$("scroll").innerHTML="";break;
+    case"_idle":S=fresh();els.clear();$("scroll").innerHTML="";break;
+    case"run_started":S.idle=false;S.run=ev;break;
+    case"attestation":S.idle=false;S.att=ev.attestation||{};break;
+    case"step_started":if(num(ev.step)){const s=stepOf(ev.step);s.cap=ev.screenshot||{};s.t0=Date.now();s.sent=true;s.start=ev}break;
+    case"planner_verified":if(num(ev.step)){const s=stepOf(ev.step);s.ver=ev}break;
+    case"planner_unverified":if(num(ev.step)){const s=stepOf(ev.step);s.unv=ev}break;
+    case"grounded":if(num(ev.step)){const s=stepOf(ev.step);s.gr=ev.grounding||{};s.grEv=ev}break;
+    case"acted":if(num(ev.step)){const s=stepOf(ev.step);s.act=ev.result==null?"done":String(ev.result);s.actEv=ev}break;
+    case"run_finished":S.fin=ev;break;
+    default:return;
+  }
+  render();
+}
+
+function actionText(a){
+  a=a||{};
+  switch(a.action){
+    case"click":return"Click "+(a.target||"the target");
+    case"type":return"Type “"+(a.text||"")+"”"+(a.enter?" and press Enter":"");
+    case"key":return"Press "+(a.key||"a key");
+    case"scroll":return"Scroll "+(a.direction||"down");
+    case"wait":return"Wait for the page";
+    case"done":return"Done: "+(a.summary||"task complete");
+    case"fail":return"Gave up: "+(a.reason||"task failed");
+    default:return a.action?String(a.action):"Unknown action";
+  }
+}
+
+function counts(){
+  let ne=0,ver=0,at=0;
+  for(const s of S.steps.values()){if(s.sent)ne++;if(s.ver&&s.ver.verification&&s.ver.verification.verified)ver++;if(s.gr)at++}
+  return{ne,ver,at};
+}
+
+function pillState(){
+  if(S.idle&&!S.run)return["idle","idle"];
+  if(S.fin){const st=S.fin.status||"done";
+    if(st==="done")return["done","finished"];
+    if(st==="failed")return["bad","failed"];
+    return[hasUnv()?"bad":"warn","stopped"]}
+  return["live","live"];
+}
+function hasUnv(){for(const s of S.steps.values())if(s.unv)return true;return false}
+
+function renderHeader(){
+  const t=$("task");
+  if(S.run&&S.run.task){t.textContent=S.run.task;t.className=""}
+  else if(S.idle){t.textContent="Waiting for a run";t.className="idle"}
+  else{t.textContent="Run starting…";t.className="idle"}
+  const c=counts();
+  $("n-ne").textContent=c.ne;$("n-ver").textContent=c.ver;$("n-at").textContent=c.at;
+  const [cls,txt]=pillState();const p=$("pill");p.className="pill "+cls;p.lastChild.textContent=txt;
+}
+
+function er(k,v,cls,title){return`<div class="er"><span class="k">${esc(k)}</span><span class="v ${cls||""}"${title?` title="${esc(title)}"`:""}>${v}</span></div>`}
+function truthy(v){if(v==null||v===false)return false;if(typeof v==="string")return v!==""&&!/^(false|no|none|0)$/i.test(v);if(Array.isArray(v))return v.length>0;if(typeof v==="object")return Object.keys(v).length>0;return !!v}
+function renderEnc(){
+  const el=$("enc");
+  const a=S.att;
+  if(!a){el.innerHTML=`<h2><span>Enclave</span><span>${S.idle?"no run":"attesting…"}</span></h2>`+er("Status",S.idle?"—":"checking attestation…","wn");return}
+  const m=a.model||{},g=a.gateway||{};
+  const tdx=m.tcb_status;const tdxOk=/^up\s*to\s*date$/i.test(tdx||"");
+  const gpu=truthy(m.gpu_evidence);
+  const tls=truthy(g.tls_binding);
+  const e2=S.run?S.run.e2ee:undefined;
+  el.innerHTML=`<h2><span>NEAR AI enclave</span><em>✓ attested</em></h2>`+
+   er("Intel TDX",tdx?esc(tdx)+(tdxOk?" ✓":""):"unknown",tdxOk?"ok":"wn","model TCB status; gateway: "+(g.tcb_status||"?"))+
+   er("NVIDIA GPU evidence",gpu?"verified ✓":"missing",gpu?"ok":"wn",JSON.stringify(m.gpu_evidence||null))+
+   er("TLS bound to gateway",tls?"yes ✓":"no",tls?"ok":"no","spki "+(g.tls_spki_fingerprint||""))+
+   er("Model signer key",esc(mid(m.signer,10,8)),"",(m.signing_algo||"")+" "+(m.signer||""))+
+   er("E2EE to model key",e2===true?"yes ✓":e2===false?"no":"unknown",e2===true?"ok":"wn");
+}
+
+function row(cls,label,detail,extra){
+  const ic=cls==="bad"?"!":cls==="act"?"":"✓";
+  return`<div class="row ${cls}"><i class="ic">${ic}</i><div><div class="rl">${label}</div>${detail?`<div class="rd">${detail}</div>`:""}${extra||""}</div></div>`;
+}
+
+function stepHTML(s,isLast){
+  const v=s.ver&&s.ver.verification,p=s.ver&&s.ver.planner,u=s.unv;
+  const bad=!!u;
+  const act=p&&p.action;
+  const isClick=act&&act.action==="click";
+  let head,hcls="";
+  if(bad)head="Reply not verified";
+  else if(act)head=esc(actionText(act));
+  else{head="Reading the screen…";hcls=" muted"}
+  const open=S.ov[s.n]!==undefined?S.ov[s.n]:isLast;
+  let h=`<div class="sh" data-n="${s.n}"><span class="sn">STEP ${s.n}</span><div class="hd${hcls}">${head}</div><span class="chev">${open?"▾":"▸"}</span></div>`;
+  if(bad){
+    h+=`<div class="banner"><b>REPLY NOT VERIFIED: agent stopped</b><p>${esc(u.error||"signature could not be verified")}</p></div>`;
+  }
+  if(open){
+    h+=`<div class="rows">`;
+    if(s.cap){
+      const c=s.cap;
+      h+=row("done","Screenshot captured",`<span class="mono" title="${esc(c.sha256||"")}">sha256 ${esc(mid(c.sha256,10,4))}</span>`+(c.width?` · ${esc(c.width)}×${esc(c.height)}`:""));
+      if(!s.ver&&!u)h+=row("act","Sent to NEAR enclave",`waiting for reply · <span class="tick" data-t0="${s.t0}">0.0</span>s`);
+      else h+=row(bad?"bad":"done","Sent to NEAR enclave",p&&num(p.latency_ms)?`answered in ${(p.latency_ms/1000).toFixed(1)} s`:(bad?"reply could not be verified":"reply received"));
+    }
+    if(s.ver&&v){
+      const gw=v.signature_kind==="gateway";
+      const ok=v.verified!==false;
+      const kind=esc(v.signature_kind||"unknown");
+      const m=v.signer_matches_attested_model;
+      let det=ok?(gw?"":(m===false?"signer does NOT match attested key":"signer matches attested key")):"signature check did not pass";
+      const hs=`<div class="rd mono" title="request ${esc(v.request_sha256||"")}\nresponse ${esc(v.response_sha256||"")}">req ${esc(mid(v.request_sha256,6,4))} · res ${esc(mid(v.response_sha256,6,4))}</div>`;
+      const note=gw?`<div class="gwnote">Signed by the attested gateway, not the model enclave</div>`:"";
+      h+=row(ok?(gw||m===false?"warn":"done"):"bad","Reply verified <span class=\"chip"+(gw?" warn":"")+"\">"+kind+"</span>",det+(v.checked_before_acting?" · checked before acting":""),note+hs);
+      if(p&&p.thought)h+=`<div class="row"><i class="ic" style="visibility:hidden"></i><div class="thought">“${esc(p.thought)}”</div></div>`;
+    }
+    if(s.ver&&isClick&&!bad){
+      if(s.gr){const g=s.gr,px=g.pixel||{};
+        h+=row("done","Atom grounded locally",`<span class="mono">(${esc(px.x)}, ${esc(px.y)})</span>${num(g.duration_ms)?` · ${Math.round(g.duration_ms)} ms`:""} · ${esc(g.where||"127.0.0.1:8760")}`);
+      }else h+=row("act","Atom grounding on this Mac","finding the target…");
+    }
+    if(s.act!=null)h+=row("done","Acted",esc(s.act));
+    else if(s.ver&&!isClick&&act&&(act.action==="done"||act.action==="fail")&&S.fin)h+="";
+    const raw=S.raw[s.n];
+    h+=`<button class="rawbtn" data-raw="${s.n}">${raw?"hide":"show"} raw receipt</button>`;
+    if(raw)h+=`<pre class="raw">${esc(S.rawText[s.n]||rawMerge(s))}</pre>`;
+    h+=`</div>`;
+  }
+  return{html:h,bad};
+}
+function rawMerge(s){
+  const o={};
+  for(const e of [s.start,s.ver,s.unv,s.grEv,s.actEv])if(e){for(const k in e)if(k!=="type")o[k]=e[k]}
+  return JSON.stringify(o,null,2);
+}
+
+function render(){
+  renderHeader();renderEnc();
+  const sc=$("scroll");
+  const near=sc.scrollHeight-sc.scrollTop-sc.clientHeight<140;
+  const list=[...S.steps.values()].sort((a,b)=>a.n-b.n);
+  const w=sc.querySelector(".wait");
+  if(!list.length){
+    if(!w)sc.innerHTML=`<div class="wait">${S.idle?"Waiting for a run…":"Waiting for the first step…"}<small>${S.idle?"This panel follows the newest run directory.":"Every screenshot is checked and logged here."}</small></div>`;
+    else w.firstChild.textContent=S.idle?"Waiting for a run…":"Waiting for the first step…";
+  }else if(w)w.remove();
+  list.forEach((s,i)=>{
+    let el=els.get(s.n);
+    if(!el){el=document.createElement("section");els.set(s.n,el);sc.appendChild(el)}
+    const r=stepHTML(s,i===list.length-1);
+    el.className="step"+(i===list.length-1?" cur":"")+(r.bad?" bad":"");
+    el.innerHTML=r.html;
+  });
+  renderFoot();
+  if(near)sc.scrollTop=sc.scrollHeight;
+}
+
+function renderFoot(){
+  const f=$("foot");
+  if(!S.fin){f.className="";f.innerHTML="";return}
+  const st=S.fin.status||"done";
+  const red=st==="stopped"&&hasUnv();
+  f.className="show "+st+(red?" red":"");
+  const title=st==="done"?"RUN COMPLETE":st==="failed"?"RUN FAILED":red?"STOPPED: REPLY NOT VERIFIED":"RUN STOPPED";
+  const n=num(S.fin.steps)?S.fin.steps:S.steps.size;
+  f.innerHTML=`<b>${esc(title)}</b><p>${esc(S.fin.summary||"")}${S.fin.summary?" · ":""}${n} step${n===1?"":"s"}</p>`;
+}
+
+$("scroll").addEventListener("click",e=>{
+  const rb=e.target.closest("[data-raw]");
+  if(rb){const n=+rb.dataset.raw;S.raw[n]=!S.raw[n];
+    if(S.raw[n]&&S.run){fetch("/receipt/"+encodeURIComponent(S.run.run_id)+"/"+n).then(r=>r.ok?r.text():null).then(t=>{if(t){try{S.rawText[n]=JSON.stringify(JSON.parse(t),null,2)}catch(_){}render()}}).catch(()=>{})}
+    render();return}
+  const sh=e.target.closest(".sh");
+  if(sh){const n=+sh.dataset.n;const list=[...S.steps.keys()];const last=Math.max(...list);
+    const cur=S.ov[n]!==undefined?S.ov[n]:n===last;S.ov[n]=!cur;render()}
+});
+setInterval(()=>{const now=Date.now();document.querySelectorAll(".tick").forEach(t=>{t.textContent=((now-(+t.dataset.t0))/1000).toFixed(1)})},100);
+
+function connect(){
+  const es=new EventSource("/events");
+  es.onmessage=m=>{try{handle(JSON.parse(m.data))}catch(_){}};
+  es.onerror=()=>{};
+}
+render();connect();
+</script>
+</body>
+</html>
