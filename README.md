@@ -36,7 +36,7 @@ What is checked, and when:
 | When | What | Code |
 |---|---|---|
 | Before the run | Gateway and model attestation (Intel TDX quote, NVIDIA GPU evidence, TLS bound to the attested gateway), done by the NEAR SDK. The agent stops if the model has no enclave report. | `Planner.start` in `agent/planner.py` |
-| Before each capture | The agent's own window covers the whole work area and nothing from another app is in front of it. | `run_task` in `agent/loop.py`; `check_region` in `agent/screen.py` |
+| Before each capture | The agent's own window covers the whole work area and no other app's window is in front of it, except the Dock, which the check ignores (see Limits). | `run_task` in `agent/loop.py`; `check_region` in `agent/screen.py` |
 | Before each action | The reply's signature is valid, is from the model enclave (`provider_tee`), covers the exact bytes sent and received, the signer is one attested before the run, and the signed request carries this run, step and screenshot hash. The agent then decrypts the signed response bytes itself and acts on that action. It refuses if the SDK's parsed action differs. Any failure stops the run before anything is executed. | `Planner.plan`, `Planner._check` in `agent/planner.py`; `run_task` in `agent/loop.py` |
 | Before a click | The point must belong to the work browser's window, checked again at the instant the mouse goes down. | `Guard.check_point`, `screen.click` |
 | Before typing or a key | The full region check and a frontmost-app check (the work browser must have focus), before the first keystroke and again before every key event. | `Guard.check_keys`, `screen.guard_keyboard` |
@@ -70,7 +70,7 @@ How this is enforced:
 - **Egress allowlist.** `agent/egress.py` allows one planner URL and one Atom URL. `tests/test_egress.py` fails if any other module in `agent/` imports a network client.
 - **Atom is loopback-only.** The Atom URL must be an `http://` loopback IP literal, with no credentials. A name such as `localhost` is refused because names can be re-pointed (`check_atom_url` in `agent/egress.py`). The Atom call bypasses system HTTP proxies (`_call` in `agent/grounder.py`).
 - **Atom's server defends itself.** It refuses a foreign `Host` header, any request with an `Origin` header and any POST that is not JSON. `image_path` is off unless the server is started with `--allow-image-path`. Each screenshot is written to its own file in a private 0700 directory and deleted right after grounding (`atom/server/atom_api.py`, [atom/README.md](atom/README.md)).
-- **Fail-closed window guard.** The agent captures and acts only while its own browser window covers the work area. A notification, another app's window, or any foreign overlay in front of it stops the run (`agent/screen.py`, `tests/test_guard.py`, `tests/test_keys.py`).
+- **Fail-closed window guard.** The agent captures and acts only while its own browser window covers the work area. A notification, another app's window, or any foreign overlay in front of it stops the run. The one exception is the Dock: `run.sh` refuses to start unless it is set to hide automatically (`check_dock` in `agent/screen.py`) (`agent/screen.py`, `tests/test_guard.py`, `tests/test_keys.py`).
 - **The agent only acts in a browser this run launched.** `--work-pid` is accepted only if the process was started with the run's own temporary `--user-data-dir` (the `--work-profile` that `run.sh` creates). The agent cannot be pointed at your own, logged-in browser (`check_work_pid` in `agent/browser.py`).
 - **Screenshots are not stored by default.** Capture goes through a temporary file that is deleted on return (`capture` in `agent/screen.py`). `--keep-screenshots` turns saving on, prints a warning, and writes the files with mode 0600. They are plaintext: delete them before sharing a receipt folder.
 - **End-to-end encryption is always on.** There is no flag to turn it off, and `verify` fails a run whose request messages are not ciphertext.
@@ -96,7 +96,7 @@ Each run writes `receipts/<run_id>/`: `events.jsonl`, `attestation.json`, and fo
 4. **bound**: the request's clear-text `user` field equals `<run_id>:<step>:<screenshot sha256>` from `events.jsonl`, so a signed step cannot be moved into another run or paired with another screenshot.
 5. **action**: the step's reply key decrypts the signed response, and the action inside equals the action recorded in the receipt.
 
-Across the run it also fails when: the reply key is missing (unless `--allow-unbound`, which labels the result weaker), steps are not exactly 1..N or disagree with `events.jsonl` and `run_finished.steps`, a step file disagrees with its event, a REFUSED step is not earned (it must be the last step, with a `guard_blocked` or `planner_unverified` event and no `acted` event), a gateway signature appears without `--allow-gateway-signature` in `run_started`, the request messages are not ciphertext, or `e2ee` was off.
+Across the run it also fails when: the reply key is missing (unless `--allow-unbound`, which labels the result weaker), steps are not exactly 1..N or disagree with `events.jsonl` and `run_finished.steps`, a step file disagrees with its event, a REFUSED step is not earned (it must be the last step, with a `guard_blocked` or `planner_unverified` event and no `acted` event), the run's ending does not match `run_finished.status` (`done` needs a last signed action `done`, `failed` needs `fail`, `stopped` needs a refused last step or the step budget `run_started.max_steps`), a signed `done` or `fail` is not the last step, a gateway signature appears without `--allow-gateway-signature` in `run_started`, the request messages are not ciphertext, or `e2ee` was off.
 
 Sample output, from the recorded run in `tests/fixtures/run` (`uv run python -m agent verify tests/fixtures/run`):
 
@@ -142,7 +142,9 @@ You need:
 - [`uv`](https://docs.astral.sh/uv/).
 - A [NEAR AI Cloud](https://cloud.near.ai) API key with credit, as `NEARAI_API_KEY=...` in a `.env` file in this directory (or exported).
 - Three macOS permissions for the terminal app you run this from: Screen Recording, Accessibility, and Automation for "System Events" (the agent uses it to bring its own window to the front). `run.sh` checks all three and says which is missing.
-- A Chromium-family browser: Google Chrome, or Playwright's Chromium. Set `BROWSER` to use another one.
+- A Chromium-family browser is required: Google Chrome, or Playwright's Chromium (install it with `uv run --with playwright python -m playwright install chromium`). Set `BROWSER` to use another one.
+- "Automatically hide and show the Dock" turned on (System Settings > Desktop & Dock). The work window needs the full 1080-point height; `run.sh` refuses to start with a visible Dock.
+- On a Retina display the capture is at pixel resolution, so the images are larger and use more tokens.
 
 ```bash
 ./run.sh --demo                                   # the hero task on the bundled mock bank site
@@ -164,7 +166,7 @@ Three tasks, five consecutive passing runs each, on one Apple M4 Mac: the hero t
 - Median planner latency per step: 8.19 s (hero), 7.33 s (transfer), 6.52 s (Wikipedia). Steps are 4, 8 and 3; median wall time per run is 75 s, 113 s and 43 s.
 - Median Atom latency per click: 0.43 s, 0.43 s, 0.51 s.
 
-This is 5 consecutive runs per task on one machine, not a pass rate. In these runs one transfer run crashed on a timed-out `osascript` call, and three hero runs were stopped by the window guard when a notification banner came forward (those did not count toward the streaks). Planner latency was 4 to 5 times higher than in an earlier measurement, for a reason that was not investigated. The full list of runs, failures and what is not verified is in [docs/RUNS.md](docs/RUNS.md).
+This is 5 consecutive runs per task on one machine, not a pass rate. In these runs one transfer run crashed on a timed-out `osascript` call (fixed since), and three hero runs were stopped by the window guard when a notification banner came forward (those did not count toward the streaks). Planner latency was 4 to 5 times higher than in an earlier measurement, for a reason that was not investigated. The full list of runs, failures and what is not verified is in [docs/RUNS.md](docs/RUNS.md).
 
 ## Limits
 
@@ -175,6 +177,10 @@ This is 5 consecutive runs per task on one machine, not a pass rate. In these ru
 - **Downloads are automatic in the work browser.** `run.sh` sets automatic downloads in the work browser's temporary profile, so a page can save files without a prompt. They land in a temporary folder that is removed when the run ends.
 - **The gateway sees your API key and the unencrypted request fields** listed above, including the run id, step and screenshot hash. Intel and NVIDIA see attestation evidence during the check (see "What leaves your Mac").
 - **The agent trusts your Mac.** Malware or a compromised OS on the Mac can read the screen, the `.env` key, and the saved reply keys.
+- **The Dock can slide over the bottom of the work area.** The window guard ignores the Dock. `run.sh` requires auto-hide, but the Dock appears when the pointer reaches the screen edge. It shows app icons only.
+- **Services already on the loopback ports are reused.** `run.sh` reuses anything already answering on `127.0.0.1:8760` (Atom) or `127.0.0.1:8765` (panel). A hostile local process there would receive screenshots. This falls under "the agent trusts your Mac", stated explicitly.
+- **A page can trigger external URL handlers** (`mailto:`, `facetime:` and similar). These may open another app after a confirmation dialog; the window guard then stops further steps.
+- **`verify` cannot prove a run was not deleted or cut short in a way that looks like a stop.** It requires the ending to match the last signed action: a `done` or `fail` that the enclave signed for that position. Someone who can edit the folder can drop trailing steps only by relabelling the run `stopped` (the guard and budget events are unsigned) or by deleting the run. They cannot forge a `done` or `fail`.
 - **Offline `verify` checks the receipt against `attestation.json` in the same folder.** It does not re-check the Intel TDX quote or the GPU evidence. Those are checked by the SDK at run time, and `attestation.json` holds only a summary of the result. Someone who can edit the whole folder can write a consistent fake, including a matching `events.jsonl`. Verification is meaningful when the receipt reaches you from a run you trust, or when you compare the signer with a fresh attestation yourself. The screenshot hash can be checked against a screenshot only if the run kept one (`--keep-screenshots`).
 - **Under E2EE the saved bytes are ciphertext.** The action in a receipt is tied to the signed reply only through the saved reply key. A receipt without `reply_key.hex` fails, unless you pass `--allow-unbound`, which prints `not bound` and a weaker summary.
 - **Receipts are not secret.** `step-N.json` holds the task, the planner's one-sentence thought, its summary, and any text it asked to type. These can describe what was on screen. Do not publish a receipt folder from a sensitive run without reading it.

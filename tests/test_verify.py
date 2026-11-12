@@ -7,7 +7,7 @@ import unittest
 
 import nacl.signing
 
-from agent.verify import verify_run
+from agent.verify import _check_ending, verify_run
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "run")
 
@@ -120,17 +120,26 @@ class VerifyRun(unittest.TestCase):
             for event in events:
                 stream.write(json.dumps(event) + "\n")
 
-    def add_final_step(self, *types, step_events=None):
-        """Append a step 4 that stopped before a verified reply, with the given event types, and make it the last step."""
-        with open(os.path.join(self.dir, "step-4.json"), "w") as stream:
-            json.dump({"step": 4, "events": list(types)}, stream)
+    def add_final_step(self, *types, replace_done=True):
+        """Append a final step that stopped before a verified reply, with the given event types. By default it
+        takes the place of the fixture's step 3 (a signed done cannot be followed by another step)."""
+        n = 3 if replace_done else 4
+        if replace_done:
+            for name in os.listdir(self.dir):
+                if name.startswith("step-3."):
+                    os.remove(os.path.join(self.dir, name))
+        with open(os.path.join(self.dir, f"step-{n}.json"), "w") as stream:
+            json.dump({"step": n, "events": list(types)}, stream)
 
         def go(events):
             finished = events.pop()
             self.assertEqual(finished["type"], "run_finished")
+            if replace_done:
+                events[:] = [e for e in events if e.get("step") != 3]
             for kind in types:
-                events.append({"type": kind, "step": 4, "reason": "covered by Other"})
-            finished["steps"] = 4
+                events.append({"type": kind, "step": n, "reason": "covered by Other"})
+            finished["steps"] = n
+            finished["status"] = "stopped"
             events.append(finished)
         self.rewrite_events(go)
 
@@ -138,7 +147,7 @@ class VerifyRun(unittest.TestCase):
         self.add_final_step("guard_blocked")
         ok, text = self.verify()
         self.assertTrue(ok, text)
-        self.assertIn("3 of 4 step(s) verified", text)
+        self.assertIn("2 of 3 step(s) verified", text)
         self.assertIn("REFUSED", text)
 
     def test_planner_unverified_final_step_passes_as_refused(self):
@@ -160,7 +169,7 @@ class VerifyRun(unittest.TestCase):
 
     def test_refused_step_must_be_final(self):
         self.add_final_step("guard_blocked")
-        # Turn the middle step into a refusal while later steps exist.
+        # Turn the middle step into a refusal while a later step exists.
         def strip(step):
             del step["verification"]
         self.edit_json("step-2.json", strip)
@@ -231,6 +240,83 @@ class VerifyRun(unittest.TestCase):
         self.assertTrue(text.startswith("FAIL"), text)
         out = io.StringIO()
         self.assertFalse(verify_run(self.dir, out, allow_unbound=True), out.getvalue())
+
+    def truncate_to_two(self, status="done", max_steps=None):
+        """Drop step 3 (files and events), keep run_finished consistent with 2 steps."""
+        for name in os.listdir(self.dir):
+            if name.startswith("step-3."):
+                os.remove(os.path.join(self.dir, name))
+
+        def go(events):
+            events[:] = [e for e in events if e.get("step") != 3]
+            for e in events:
+                if e["type"] == "run_finished":
+                    e.update(steps=2, status=status)
+                if e["type"] == "run_started" and max_steps is not None:
+                    e["max_steps"] = max_steps
+        self.rewrite_events(go)
+
+    def test_truncation_forgery_fails(self):
+        """Drop step 3 and its events, set steps=2, keep status 'done': the last action is a click, not a signed done."""
+        self.truncate_to_two()
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("not 'done'", text)
+
+    def test_truncated_run_relabelled_stopped_without_budget_fails(self):
+        self.truncate_to_two(status="stopped")
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("no max_steps", text)
+
+    def test_budget_exhausted_stop_passes(self):
+        self.truncate_to_two(status="stopped", max_steps=2)
+        ok, text = self.verify()
+        self.assertTrue(ok, text)
+
+    def test_stopped_before_budget_without_refusal_fails(self):
+        self.truncate_to_two(status="stopped", max_steps=12)
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("step budget", text)
+
+    def test_status_failed_with_done_action_fails(self):
+        self.rewrite_events(lambda ev: ev[-1].update(status="failed"))
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("not 'fail'", text)
+
+    def test_unknown_status_fails(self):
+        self.rewrite_events(lambda ev: ev[-1].update(status="ok"))
+        ok, text = self.verify()
+        self.assertFalse(ok)
+
+    def test_status_done_but_last_step_refused_fails(self):
+        self.add_final_step("guard_blocked")
+        self.rewrite_events(lambda ev: ev[-1].update(status="done"))
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("not 'done'", text)
+
+    def test_done_in_the_middle_fails(self):
+        """The fixture's signed done at step 3, followed by a step 4: done may only be last."""
+        self.add_final_step("guard_blocked", replace_done=False)
+        ok, text = self.verify()
+        self.assertFalse(ok)
+        self.assertIn("not the last step", text)
+
+    def ending(self, actions, status, **started):
+        files = {i + 1: ({"verification": {}, "planner": {"action": {"action": a}}} if a else {}) for i, a in enumerate(actions)}
+        return _check_ending(files, len(actions), status, started, [], False)
+
+    def test_signed_fail_with_status_failed_passes(self):
+        self.assertEqual(self.ending(["click", "fail"], "failed"), [])
+
+    def test_fail_with_status_done_fails(self):
+        self.assertTrue(self.ending(["click", "fail"], "done"))
+
+    def test_fail_in_the_middle_fails(self):
+        self.assertTrue(self.ending(["fail", "click"], "stopped", max_steps=2))
 
     def test_missing_last_step_fails(self):
         os.remove(os.path.join(self.dir, "step-3.json"))

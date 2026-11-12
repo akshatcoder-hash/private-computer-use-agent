@@ -160,6 +160,28 @@ def check_point(windows: list[Win], x: float, y: float, work_pid: int, allow: fr
     return f"no window at ({x:.0f}, {y:.0f})"
 
 
+def check_dock(windows: list[Win], autohide: bool, region: Region) -> str | None:
+    """check_region ignores the Dock (layer 20). That is safe only if it cannot sit on the work area at rest:
+    a visible, non-auto-hidden Dock that overlaps the region is a reason to refuse to start."""
+    if autohide:
+        return None
+    x0, y0, x1, y1 = float(region.x), float(region.y), float(region.x + region.width), float(region.y + region.height)
+    for w in windows:
+        if w.owner == "Dock" and w.layer == 20 and w.alpha > 0 and w.w > 0 and w.h > 0 and _intersects(w, x0, y0, x1, y1):
+            return (f"the Dock is visible over the work area (at {w.x:.0f},{w.y:.0f} {w.w:.0f}x{w.h:.0f}) and is not set to "
+                    "hide automatically")
+    return None
+
+
+def dock_problem(region: Region) -> str | None:
+    try:
+        out = subprocess.run(["defaults", "read", "com.apple.dock", "autohide"], capture_output=True, text=True, timeout=5)
+        autohide = out.stdout.strip() in ("1", "true")
+    except (subprocess.TimeoutExpired, OSError):
+        autohide = False
+    return check_dock(list_windows(), autohide, region)
+
+
 def frontmost_pid() -> int | None:
     from AppKit import NSWorkspace
     app = NSWorkspace.sharedWorkspace().frontmostApplication()

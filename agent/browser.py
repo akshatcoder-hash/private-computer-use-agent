@@ -38,9 +38,13 @@ class WorkBrowser:
     def wait_ready(self, seconds: float = 2.5):
         time.sleep(seconds)
         # Bring our own window to the front: macOS does not always focus a process started from a terminal.
-        subprocess.run(["osascript", "-e", 'tell application "System Events" to set frontmost of '
-                        f"(first process whose unix id is {self._proc.pid}) to true"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Best effort, like screen.bring_to_front: a stalled System Events must not hang the run. The guard decides afterwards.
+        try:
+            subprocess.run(["osascript", "-e", 'tell application "System Events" to set frontmost of '
+                            f"(first process whose unix id is {self._proc.pid}) to true"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+        except (subprocess.TimeoutExpired, OSError):
+            pass
         time.sleep(0.7)
 
     def close(self):

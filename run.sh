@@ -9,6 +9,8 @@ ATOM_URL="http://127.0.0.1:$ATOM_PORT"; PANEL_URL="http://127.0.0.1:$PANEL_PORT"
 HERO_TASK="Download the October statement as PDF"
 
 die() { echo "run.sh: $*" >&2; exit 2; }
+# with_timeout SECONDS cmd...: kills cmd after SECONDS (exit 142), so a stalled System Events cannot hang this script.
+with_timeout() { local n="$1"; shift; perl -e 'alarm shift; exec @ARGV' "$n" "$@"; }
 
 TASK=""; START_URL=""; DEMO=0; EXTRA=()
 while [[ $# -gt 0 ]]; do
@@ -46,7 +48,7 @@ PERM="$(uv run python -c 'from agent import screen; print(", ".join(screen.missi
 [[ -z "$PERM" ]] || die "this terminal app lacks: $PERM. Open System Settings > Privacy & Security, switch this terminal on under each of those entries, then quit and reopen the terminal and run this again."
 
 # macOS asks once whether this terminal may control "System Events" (used to bring our window to the front).
-AUTO_ERR="$(osascript -e 'tell application "System Events" to get name of first process' 2>&1 >/dev/null)" \
+AUTO_ERR="$(with_timeout 60 osascript -e 'tell application "System Events" to get name of first process' 2>&1 >/dev/null)" \
   || die "this terminal is not allowed to control System Events (${AUTO_ERR:-no detail}). Open System Settings > Privacy & Security > Automation, find this terminal app, switch on \"System Events\", then run this again."
 
 # The layout is the work area (1400 x 1080 points) plus the receipt panel (520 x 1080): 1920 x 1080 at least.
@@ -56,6 +58,10 @@ read -r DISPLAY_W DISPLAY_H <<<"$SIZE"
 if [[ "${DISPLAY_W:-0}" -lt 1920 || "${DISPLAY_H:-0}" -lt 1080 ]]; then
   die "the main display is ${DISPLAY_W}x${DISPLAY_H} points; this needs at least 1920x1080 (work area 1400 + panel 520, 1080 high). Use a larger display or a larger scaled resolution in System Settings > Displays."
 fi
+
+# check_region ignores the Dock, so a visible one must not be able to sit over the bottom of the 1080-point work window.
+DOCK_WHY="$(uv run python -m agent dock --region 0,0,1400,1080 2>&1)" \
+  || die "$DOCK_WHY. Turn on 'Automatically hide and show the Dock' (System Settings > Desktop & Dock), the work window needs the full 1080-point height."
 
 # Bookkeeping so we stop only what we started
 PIDS=(); TMPS=()
@@ -142,7 +148,7 @@ print(json.dumps({"download": {"default_directory": d, "prompt_for_download": Fa
     "--window-position=$2,$3" "--window-size=$4,$5" "--app=$6" >/dev/null 2>&1 &
   LAST_PID=$!; PIDS+=("$LAST_PID")
 }
-front() { osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $1) to true" >/dev/null 2>&1; }
+front() { with_timeout 5 osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $1) to true" >/dev/null 2>&1; }
 
 open_window panel 1400 0 520 1080 "$PANEL_URL/"; PANEL_WIN=$LAST_PID
 sleep 2

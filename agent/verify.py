@@ -6,7 +6,13 @@ Fails (exit 1) unless EVERY step's signed reply is bound and consistent. For eve
   sig      the signature over signed_text verifies under the signer key (ed25519 or ecdsa)
   signer   the signer equals the attested model signer recorded in attestation.json
   bound    the request JSON's clear-text `user` field equals "<run_id>:<step>:<screenshot sha256>" taken from events.jsonl
-  steps    steps are exactly 1..N, N = run_finished.steps = the step_started events; step files agree with events.jsonl
+  steps    steps are exactly 1..N, where N is run_finished.steps (a number the run itself wrote, not signed); the step
+           files and step_started events must agree with it
+  ending   the run's last step must fit run_finished.status: "done" needs a last signed action `done`, "failed" needs `fail`,
+           "stopped" needs a last step that is an earned REFUSED or tripped the guard (guard_blocked / planner_unverified),
+           or N equal to run_started.max_steps (the budget; runs recorded without max_steps FAIL unless --allow-unbound).
+           A signed `done` or `fail` may only be the last step. So trailing steps cannot be cut off a run that ended
+           in done/failed without a signed done/fail for the new last position.
   action   step-N.reply_key.hex (REQUIRED unless --allow-unbound) decrypts the signed response (the SDK's own decryption), the action is parsed
            exactly as the planner parses it, and must equal the action recorded in step-N.json
 Under E2EE the .bin files are ciphertext; without the reply key a receipt only proves which bytes the enclave
@@ -163,6 +169,46 @@ def _check_consistency(step: dict, events: list[dict]) -> list[str]:
     return problems
 
 
+def _signed_action(step: dict) -> str | None:
+    """The planner action of a step that has a verified reply (its integrity is checked per step by check_action)."""
+    if "verification" not in step:
+        return None
+    return (step.get("planner", {}).get("action") or {}).get("action")
+
+
+def _check_ending(files: dict[int, dict], total: int, status, run_started: dict, events: list[dict],
+                  allow_unbound: bool) -> list[str]:
+    """The run must end the way run_finished.status says, using the signed actions and the recorded step budget."""
+    problems = []
+    for n in range(1, total):
+        if _signed_action(files[n]) in ("done", "fail"):
+            problems.append(f"step {n} is a signed {_signed_action(files[n])!r} but is not the last step (run has {total})")
+    last = _signed_action(files[total])
+    if status == "done":
+        if last != "done":
+            problems.append(f"run_finished.status is 'done' but the last step's signed action is {last!r}, not 'done'")
+    elif status == "failed":
+        if last != "fail":
+            problems.append(f"run_finished.status is 'failed' but the last step's signed action is {last!r}, not 'fail'")
+    elif status == "stopped":
+        types = {e.get("type") for e in events if e.get("step") == total}
+        if last in ("done", "fail"):
+            problems.append(f"run_finished.status is 'stopped' but the last step's signed action is {last!r}")
+        elif not types & {"guard_blocked", "planner_unverified"}:
+            budget = run_started.get("max_steps")
+            if not isinstance(budget, int):
+                if not allow_unbound:
+                    problems.append("status 'stopped' with no guard_blocked/planner_unverified event on the last step, and "
+                                    "run_started has no max_steps (older receipt): cannot tell a budget stop from a cut log "
+                                    "(--allow-unbound accepts it)")
+            elif total != budget:
+                problems.append(f"status 'stopped' but the last step is neither a refusal nor the step budget "
+                                f"(run has {total} steps, max_steps is {budget})")
+    else:
+        problems.append(f"run_finished.status {status!r} is not one of done, failed, stopped")
+    return problems
+
+
 def verify_run(run_dir: str, out=sys.stdout, allow_unbound: bool = False) -> bool:
     def fail(message: str) -> bool:
         print(f"FAIL: {message}", file=out)
@@ -276,6 +322,10 @@ def verify_run(run_dir: str, out=sys.stdout, allow_unbound: bool = False) -> boo
         verified_steps += status == "PASS"
     if verified_steps == 0:
         ok = False
+    ending = _check_ending(files, total, finishes[0].get("status"), run_started, events, allow_unbound)
+    for problem in ending:
+        print(f"FAIL: ending: {problem}", file=out)
+    ok &= not ending
     notes = []
     if unbound:
         notes.append(f"--allow-unbound: {unbound} step(s) have no reply key, so the recorded action is NOT proven to be what the enclave said")
@@ -289,6 +339,8 @@ def verify_run(run_dir: str, out=sys.stdout, allow_unbound: bool = False) -> boo
         meaning = "every step's signed reply is bound to its run, step and screenshot and is consistent with events.jsonl"
     elif ok:
         meaning = "UNBOUND/GATEWAY-ONLY steps accepted by explicit opt-in; weaker than a default PASS"
+    elif ending:
+        meaning = "the run's ending does not match its signed steps"
     else:
         meaning = "at least one step is not verified"
     print(f"{'PASS' if ok else 'FAIL'}: {verified_steps} of {total} step(s) verified; {meaning}", file=out)

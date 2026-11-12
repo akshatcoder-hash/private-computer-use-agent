@@ -90,6 +90,7 @@ Whole-run checks that also FAIL the run:
 - `run_started.e2ee` is not true.
 - There is no `run_finished` event, or its `steps` count does not match.
 - The steps are not exactly `1..N`, where N is `run_finished.steps`: a missing step, an extra step, or `request.bin`, `response.bin` or `reply_key.hex` files with no step file.
+- The ending does not match `run_finished.status`: `done` needs the last step's signed action to be `done`; `failed` needs `fail`; `stopped` needs the last step to be an earned REFUSED or to carry a `guard_blocked` or `planner_unverified` event, or N to equal `run_started.max_steps` (receipts without `max_steps` fail here unless `--allow-unbound`). A signed `done` or `fail` anywhere but the last step also fails. N itself is only what the run wrote in `run_finished.steps`; the ending check is what ties it to signed data.
 - A `step_started` event falls outside `1..N`, or a step file's own `step` number is wrong.
 - The request messages are not end-to-end encrypted ciphertext (a non-string content, or a `data:image` URL).
 - The signature is from the gateway but `run_started.allow_gateway_signature` is not true.
@@ -110,12 +111,13 @@ step result   kind         hashes  signature signer  bound  action    recorded
 PASS: 3 of 3 step(s) verified; every step's signed reply is bound to its run, step and screenshot and is consistent with events.jsonl
 ```
 
-`tests/test_verify.py` covers these failures: a flipped byte in the request or response, a changed signature or signed text, a wrong signer, a signer outside the attested set, a wrong model prefix, an edited recorded action, a swapped or garbage reply key, a missing reply key, a missing wire file, a missing, extra or renumbered step, a wrong `run_finished` count, a step file that disagrees with `events.jsonl`, a spliced run id or screenshot hash, a missing `user` field, a plaintext request, a gateway signature without opt-in, an unearned or non-final refusal, a non-zero exit code on FAIL, and a response re-signed with an attacker's key.
+`tests/test_verify.py` covers these failures (among them a truncated run that still says `done`, a status that does not match the last action, and a `done` in the middle): a flipped byte in the request or response, a changed signature or signed text, a wrong signer, a signer outside the attested set, a wrong model prefix, an edited recorded action, a swapped or garbage reply key, a missing reply key, a missing wire file, a missing, extra or renumbered step, a wrong `run_finished` count, a step file that disagrees with `events.jsonl`, a spliced run id or screenshot hash, a missing `user` field, a plaintext request, a gateway signature without opt-in, an unearned or non-final refusal, a non-zero exit code on FAIL, and a response re-signed with an attacker's key.
 
 ## What this does not establish
 
 - **What the agent did on screen.** The signature covers the planner's reply. The clicks and keystrokes that followed are recorded by the agent itself (`acted` events, `action_performed`) and are not signed. Atom runs locally and is not signed either; the receipt records its instruction and the pixel it returned (`grounded` event), as reported by the agent.
 - **Which instance answered.** NEAR documents that instances of a model share one signing key. A matching signer does not show that the attested report and the completion came from the same serving instance.
+- **That the run was not deleted or trimmed.** Trailing steps cannot be dropped from a run that ended in `done` or `failed`, because the new last step would need a signed `done` or `fail` that the enclave never produced for that position. They can be dropped if the run is relabelled `stopped`, since the events that justify a stop (`guard_blocked`, the step budget) are unsigned. A whole run folder can always be deleted.
 - **That the TDX quote is valid, offline.** `verify` compares the receipt's signer with the ones recorded in `attestation.json`. It does not re-verify the quote or GPU evidence, and `attestation.json` and `events.jsonl` are written by the same run. A forger who can rewrite the whole folder can make a consistent fake. The run-time check by the SDK is the one that binds the signer to hardware evidence.
 - **That the screenshot hash matches a real screenshot.** `verify` checks that the hash in the signed request equals the one in `events.jsonl`. You can compare it to a screenshot only if the run used `--keep-screenshots`.
 - **That the answer is correct.** The signature says what the enclave produced, not that it is a good action.

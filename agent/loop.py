@@ -140,7 +140,7 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
                    keep_screenshots: bool = False, region: screen.Region = WORK_AREA, work_pid: int,
                    allow_overlays: frozenset[str] | None = None, log=print) -> Result:
     run.event("run_started", run_id=run.run_id, task=task, model=planner.model, e2ee=planner.e2ee,
-              start_url=start_url, allow_gateway_signature=planner.allow_gateway)
+              start_url=start_url, allow_gateway_signature=planner.allow_gateway, max_steps=max_steps)
     totals = {"prompt": 0, "completion": 0}
     region = screen.work_region(region)  # below the menu bar: the capture holds only the work window
     guard = Guard(work_pid, region, allow_overlays)

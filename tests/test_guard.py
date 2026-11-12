@@ -124,3 +124,17 @@ class BringToFrontIsBestEffort(unittest.TestCase):
         from agent import screen
         with mock.patch.object(screen.subprocess, "run", side_effect=subprocess.TimeoutExpired("osascript", 5)):
             screen.bring_to_front(123)  # must not raise; the guard re-check decides
+
+
+class DockStartupTests(unittest.TestCase):
+    def test_visible_dock_over_work_area_is_refused(self):
+        from agent.screen import check_dock
+        self.assertIn("Dock", check_dock([DOCK, MINE], False, REGION))
+
+    def test_autohidden_dock_is_accepted(self):
+        from agent.screen import check_dock
+        self.assertIsNone(check_dock([DOCK, MINE], True, REGION))
+
+    def test_visible_dock_below_the_region_is_accepted(self):
+        from agent.screen import check_dock
+        self.assertIsNone(check_dock([win(2, "Dock", 0, 1100, 1400, 80, layer=20)], False, REGION))

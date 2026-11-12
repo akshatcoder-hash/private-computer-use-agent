@@ -82,6 +82,14 @@ def cmd_guard(args) -> int:
     return 0 if reason is None else 1
 
 
+def cmd_dock(args) -> int:
+    """Exit 0 if the Dock cannot sit on the work area; print the reason and exit 1 otherwise."""
+    from . import screen
+    reason = screen.dock_problem(screen.Region.parse(args.region))
+    print(reason or "ok")
+    return 0 if reason is None else 1
+
+
 def cmd_verify(args) -> int:
     from .verify import verify_run
     return 0 if verify_run(args.run_dir, allow_unbound=args.allow_unbound) else 1
@@ -110,6 +118,9 @@ def main() -> int:
     guard.add_argument("--region", default="0,0,1400,1080")
     guard.add_argument("--allow-overlay", action="append", metavar="APP")
     guard.set_defaults(func=cmd_guard)
+    dock = sub.add_parser("dock", help="check that a visible Dock does not overlap the work area")
+    dock.add_argument("--region", default="0,0,1400,1080")
+    dock.set_defaults(func=cmd_dock)
     verify = sub.add_parser("verify", help="check a run's receipt offline")
     verify.add_argument("run_dir")
     verify.add_argument("--allow-unbound", action="store_true",

@@ -22,6 +22,8 @@ Medians are over every step (planner) or every grounded click (Atom) of the five
 
 The planner latency is 4 to 5 times higher than in the earlier measurement (1.2 to 1.7 s). Individual steps ranged from 1.2 s to 40.7 s. The Atom numbers did not change. A follow-up probe right after the streaks sent nine identical one-word text calls (no screenshot) to the same model: completion times ranged from 0.58 s to 18.24 s, with spikes both with and without the new `user` binding field, so the variance comes from the planner service or the network at that time, not from this change.
 
+The streaks ran on the code just before that fix, plus nothing else.
+
 Live runs: 20 (T1 8, T2 7, T3 5), of which 18 made a planner call. Cap was 30. The T1 count includes the recording dry run below.
 
 ## Final streaks (run ids in `receipts/`, gitignored)
@@ -60,7 +62,7 @@ Live runs: 20 (T1 8, T2 7, T3 5), of which 18 made a planner call. Cap was 30. T
 | Run | Outcome | Reason |
 |---|---|---|
 | 20261112-231150 | PASS | 8 steps. Not in the final streak (the next run failed). |
-| none (no receipt written) | FAIL | The agent crashed before its first capture: `subprocess.TimeoutExpired` from `screen.bring_to_front` (`osascript ... System Events` took longer than its 5 s timeout), uncaught in `agent/loop.py` `passes`. No click or key was sent. This is a bug: a slow System Events should end as a guard stop, not a traceback. |
+| none (no receipt written) | FAIL | The agent crashed before its first capture: `subprocess.TimeoutExpired` from `screen.bring_to_front` (`osascript ... System Events` took longer than its 5 s timeout), uncaught in `agent/loop.py` `passes`. No click or key was sent. Fixed after the streaks, in commit "Re-measure the demo tasks on the hardened code; fix a guard crash": `bring_to_front` now treats a timeout as best effort and the guard re-check decides. |
 | 20261112-231351 | PASS | Streak 1. |
 | 20261112-231541 | PASS | Streak 2. |
 | 20261112-231724 | PASS | Streak 3. |
@@ -99,6 +101,6 @@ GLM ran with `reasoning_effort: "low"` and a 2,500-token completion cap (it used
 ## Not verified
 
 - The latency rise is attributed to service-side variance by a small probe (nine calls), not by a controlled study.
-- Five in a row is a small sample; it does not measure a rate. One T2 run in this round crashed on an `osascript` timeout, and 3 T1 runs were stopped by the guard when a notification banner or a menu bar app came forward.
+- Five in a row is a small sample; it does not measure a rate. One T2 run in this round crashed on an `osascript` timeout (since fixed), and 3 T1 runs were stopped by the guard when a notification banner or a menu bar app came forward.
 - The streaks were taken with Wispr Flow's overlay allowed and nobody using the Mac. The recording check covers `screencapture -v` only.
 - Wikipedia and Chrome can change.
