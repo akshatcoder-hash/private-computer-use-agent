@@ -1,0 +1,10 @@
+[project]
+name = "private-computer-use-agent"
+version = "0.1.0"
+description = "A computer-use agent whose screenshots go only to a local grounding model and an attested NEAR AI Cloud enclave."
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "nearai-inference-sdk==0.3.0",
+    "pillow>=11",
+    "pyobjc-framework-Quartz>=11; sys_platform == 'darwin'",
+]
