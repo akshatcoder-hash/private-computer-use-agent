@@ -1,0 +1,48 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 668 >>
+stream
+BT /F1 14 Tf 60 740 Td 20 TL
+(Alderbrook Bank - Statement September 2026) Tj T*
+(Maya Okafor - Everyday Checking ending 4821) Tj T*
+(Sep 1 - Sep 30, 2026) Tj T*
+() Tj T*
+(Opening balance: $8,402.10) Tj T*
+(Closing balance: $9,871.55) Tj T*
+() Tj T*
+(Sep 1  Salary - Northwind Logistics  +$4,860.00) Tj T*
+(Sep 2  Rent - Maple Court Apartments  -$2,150.00) Tj T*
+(Sep 4  Pharmacy - Lakeview Rx  -$42.18) Tj T*
+(Sep 7  Grocery - Greenfield Market  -$136.74) Tj T*
+(Sep 12  Electric - Metro Power  -$98.40) Tj T*
+(Sep 15  Salary - Northwind Logistics  +$4,860.00) Tj T*
+(Sep 19  Dental - Brightside Clinic  -$215.00) Tj T*
+(Sep 26  Transfer to Savings  -$750.00) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000960 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1030
+%%EOF

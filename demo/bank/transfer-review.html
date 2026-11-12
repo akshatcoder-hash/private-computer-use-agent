@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Review transfer - Alderbrook Bank</title><link rel="stylesheet" href="style.css"></head>
+<body><header><div class="bar"><div class="brand">Alderbrook Bank</div><nav><a href="index.html">Accounts</a><a href="statements.html">Statements</a><a href="transfers.html" class=on>Transfers</a><a href="cards.html">Cards</a></nav></div></header>
+<main>
+<h1>Review your transfer</h1><p class="sub">Check the details, then confirm.</p>
+<div id="slot" class="slot" role="status"></div>
+<div class="card"><div class="kv">
+<div><span>From</span><b>Checking 4821</b></div><div><span>To</span><b id="rto"></b></div><div><span>Amount</span><b id="ramt"></b></div><div><span>Fee</span><b>$0.00</b></div></div></div>
+<div class="card"><button id="go" class="btn big" type="button">Confirm transfer</button></div>
+</main><script src="app.js"></script><script>
+var q=new URLSearchParams(location.search),to=q.get('to')||'Recipient',amt=q.get('amount')||'0.00';
+if(amt.charAt(0)!=='$')amt='$'+amt;
+document.getElementById('rto').textContent=to;document.getElementById('ramt').textContent=amt;
+document.getElementById('go').addEventListener('click',function(){
+  ev('transfer_confirmed',to+' '+amt,{recipient:to,amount:amt});
+  var s=document.getElementById('slot');s.className='slot ok';s.textContent='Transfer confirmed: '+amt+' sent to '+to;
+});</script></body></html>

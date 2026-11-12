@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Statement August 2026 - Alderbrook Bank</title><link rel="stylesheet" href="style.css"></head>
+<body><header><div class="bar"><div class="brand">Alderbrook Bank</div><nav><a href="index.html">Accounts</a><a href="statements.html" class=on>Statements</a><a href="transfers.html">Transfers</a><a href="cards.html">Cards</a></nav></div></header>
+<main>
+<h1>Statement: August 2026</h1><p class="sub">Everyday Checking, account ending 4821 - Aug 1 - Aug 31, 2026</p>
+<div id="slot" class="slot" role="status"></div>
+<div class="card"><div class="kv">
+<div><span>Opening balance</span><b>$7,955.92</b></div><div><span>Total deposits</span><b class="pos">$9,720.00</b></div>
+<div><span>Total withdrawals</span><b class="neg">$3,392.32</b></div><div><span>Closing balance</span><b>$8,402.10</b></div></div></div>
+<div class="card"><div class="row"><button id="dl" class="btn big" type="button">Download PDF</button></div></div>
+<div class="card"><h2>Transactions</h2><table><tr><th>Date</th><th>Description</th><th class="r">Amount</th></tr><tr><td>Aug 1</td><td>Salary - Northwind Logistics</td><td class="r pos">+$4,860.00</td></tr><tr><td>Aug 2</td><td>Rent - Maple Court Apartments</td><td class="r neg">-$2,150.00</td></tr><tr><td>Aug 4</td><td>Pharmacy - Lakeview Rx</td><td class="r neg">-$42.18</td></tr><tr><td>Aug 7</td><td>Grocery - Greenfield Market</td><td class="r neg">-$136.74</td></tr><tr><td>Aug 12</td><td>Electric - Metro Power</td><td class="r neg">-$98.40</td></tr><tr><td>Aug 15</td><td>Salary - Northwind Logistics</td><td class="r pos">+$4,860.00</td></tr><tr><td>Aug 19</td><td>Dental - Brightside Clinic</td><td class="r neg">-$215.00</td></tr><tr><td>Aug 26</td><td>Transfer to Savings</td><td class="r neg">-$750.00</td></tr></table></div>
+</main><script src="app.js"></script><script>
+document.getElementById('dl').addEventListener('click',function(){
+  var f='statement-august-2026.pdf', a=document.createElement('a'); a.href='files/'+f; a.download=f;
+  document.body.appendChild(a); a.click(); a.remove();
+  ev('statement_downloaded','august-2026');
+  var s=document.getElementById('slot'); s.className='slot ok'; s.textContent='Statement downloaded: '+f;
+});</script></body></html>
