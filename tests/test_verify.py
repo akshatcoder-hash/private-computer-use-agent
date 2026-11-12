@@ -111,6 +111,19 @@ class VerifyRun(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("signer is not the attested signer", text)
 
+    def test_guard_stop_after_verified_steps_still_passes(self):
+        with open(os.path.join(self.dir, "step-4.json"), "w") as stream:
+            json.dump({"step": 4, "action": "capture", "reason": "covered by Other", "events": ["guard_blocked"]}, stream)
+        ok, text = self.verify()
+        self.assertTrue(ok, text)
+        self.assertIn("3 of 4 step(s) verified", text)
+
+    def test_unverified_step_without_guard_event_still_fails(self):
+        with open(os.path.join(self.dir, "step-4.json"), "w") as stream:
+            json.dump({"step": 4, "events": ["step_started"]}, stream)
+        ok, _ = self.verify()
+        self.assertFalse(ok)
+
     def test_missing_wire_file_fails(self):
         os.remove(os.path.join(self.dir, "step-1.request.bin"))
         ok, _ = self.verify()

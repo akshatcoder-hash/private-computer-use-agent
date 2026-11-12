@@ -112,6 +112,18 @@ def _effective_top(windows: list[Win], region: Region) -> float:
     return top
 
 
+def clip_below_menubar(windows: list[Win], region: Region) -> Region:
+    """The part of region below the menu bar, so captures never contain other apps' menu bar status icons."""
+    top = int(-(-_effective_top(windows, region) // 1))  # ceil
+    if top <= region.y:
+        return region
+    return Region(region.x, top, region.width, region.y + region.height - top)
+
+
+def work_region(region: Region) -> Region:
+    return clip_below_menubar(list_windows(), region)
+
+
 def check_region(windows: list[Win], region: Region, work_pid: int, allow: frozenset[str] = frozenset()) -> str | None:
     """None if the whole region is covered by a window of work_pid with nothing foreign in front of it; else the reason."""
     x0, x1, y1 = float(region.x), float(region.x + region.width), float(region.y + region.height)

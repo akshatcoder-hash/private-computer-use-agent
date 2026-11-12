@@ -74,6 +74,7 @@ header{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:lin
 .banner p{margin-top:6px;font:15px/1.35 var(--mono);color:#ffd0d0;overflow-wrap:anywhere}
 .gwnote{margin:2px 0 4px;padding:8px 10px;border:1px solid var(--amber);background:var(--amber-bg);color:var(--amber);border-radius:8px;font-weight:650;font-size:16px}
 .thought{color:var(--mute);font-style:italic;font-size:16px}
+.banner.guard p{color:var(--text)} .banner.guard{background:var(--amber-bg);border-color:var(--amber)} .banner.guard b{color:var(--amber)}
 .rawbtn{margin:4px 0 6px;background:none;border:1px solid var(--line2);color:var(--mute);border-radius:6px;padding:4px 10px;font:600 14px var(--mono);cursor:pointer}
 pre.raw{margin:4px 0 8px;padding:10px;background:#05070a;border:1px solid var(--line);border-radius:8px;font:13.5px/1.4 var(--mono);color:#cfe3f5;white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow-y:auto}
 footer{display:none;padding:14px 20px 16px;border-top:2px solid var(--line2)}
@@ -127,6 +128,7 @@ function handle(ev){
     case"screenshot_sent":if(num(ev.step)){S.sends.push({step:ev.step,to:ev.to,host:ev.host,bytes:ev.bytes})}break;
     case"grounded":if(num(ev.step)){const s=stepOf(ev.step);s.gr=ev.grounding||{};s.grEv=ev}break;
     case"acted":if(num(ev.step)){const s=stepOf(ev.step);s.act=ev.result==null?"done":String(ev.result);s.actEv=ev}break;
+    case"guard_blocked":if(num(ev.step)){const s=stepOf(ev.step);s.gb=ev}break;
     case"run_finished":S.fin=ev;break;
     default:return;
   }
@@ -165,9 +167,10 @@ function pillState(){
   if(S.fin){const st=S.fin.status||"done";
     if(st==="done")return["done","finished"];
     if(st==="failed")return["bad","failed"];
-    return[hasUnv()?"bad":"warn","stopped"]}
+    return[hasUnv()&&!isGuardStop()?"bad":"warn",isGuardStop()?"safety stop":"stopped"]}
   return["live","live"];
 }
+function isGuardStop(){return !!(S.fin&&/^work window not in front/i.test(S.fin.summary||""))||[...S.steps.values()].some(s=>s.gb)}
 function hasUnv(){for(const s of S.steps.values())if(s.unv)return true;return false}
 
 function renderHeader(){
@@ -207,14 +210,19 @@ function row(cls,label,detail,extra){
 function stepHTML(s,isLast){
   const v=s.ver&&s.ver.verification,p=s.ver&&s.ver.planner,u=s.unv;
   const bad=!!u;
+  const gb=s.gb;
   const act=p&&p.action;
   const isClick=act&&act.action==="click";
   let head,hcls="";
-  if(bad)head="Reply not verified";
+  if(gb)head="Agent stopped: window not in front";
+  else if(bad)head="Reply not verified";
   else if(act)head=esc(actionText(act));
   else{head="Reading the screen…";hcls=" muted"}
   const open=S.ov[s.n]!==undefined?S.ov[s.n]:isLast;
   let h=`<div class="sh" data-n="${s.n}"><span class="sn">STEP ${s.n}</span><div class="hd${hcls}">${head}</div><span class="chev">${open?"▾":"▸"}</span></div>`;
+  if(gb){
+    h+=`<div class="banner guard"><b>Agent stopped: its window was not in front (${esc(gb.reason||"another window was on top")})</b><p>Nothing was ${gb.action==="capture"?"captured or sent":"clicked or typed"}. This is a safety stop, not a crash.</p></div>`;
+  }
   if(bad){
     h+=`<div class="banner"><b>REPLY NOT VERIFIED: agent stopped</b><p>${esc(u.error||"signature could not be verified")}</p></div>`;
   }
@@ -282,9 +290,10 @@ function renderFoot(){
   const f=$("foot");
   if(!S.fin){f.className="";f.innerHTML="";return}
   const st=S.fin.status||"done";
-  const red=st==="stopped"&&hasUnv();
+  const guard=st==="stopped"&&isGuardStop();
+  const red=st==="stopped"&&hasUnv()&&!guard;
   f.className="show "+st+(red?" red":"");
-  const title=st==="done"?"RUN COMPLETE":st==="failed"?"RUN FAILED":red?"STOPPED: REPLY NOT VERIFIED":"RUN STOPPED";
+  const title=st==="done"?"RUN COMPLETE":st==="failed"?"RUN FAILED":guard?"SAFETY STOP: WORK WINDOW NOT IN FRONT":red?"STOPPED: REPLY NOT VERIFIED":"RUN STOPPED";
   const n=num(S.fin.steps)?S.fin.steps:S.steps.size;
   f.innerHTML=`<b>${esc(title)}</b><p>${esc(S.fin.summary||"")}${S.fin.summary?" · ":""}${n} step${n===1?"":"s"}</p>`;
 }

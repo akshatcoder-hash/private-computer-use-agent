@@ -151,7 +151,6 @@ Measured pass rates and latencies are in [docs/RUNS.md](docs/RUNS.md).
 - **The panel serves receipts over loopback.** It listens on `127.0.0.1:8765` (`panel/server.py:167`), so any process on your Mac can read them there while it runs.
 - **Atom is small.** It can miss on busy pages, or click the wrong thing. If Atom cannot place a target after one retry, nothing is clicked. The failure goes into the planner's history and the run continues until the step budget (`agent/loop.py:98-99,214`).
 - **macOS and Apple silicon only.** The agent uses Quartz and `screencapture`; Atom uses MLX (`agent/screen.py`, `atom/README.md`).
-- **The egress check validates a constant.** The agent does not pass a URL to the SDK, so the SDK's default (`https://cloud-api.near.ai/v1`) is what is used. The two values are equal.
 
 ## Repo layout
 

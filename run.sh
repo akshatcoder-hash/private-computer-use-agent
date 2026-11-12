@@ -17,6 +17,7 @@ while [[ $# -gt 0 ]]; do
     --start-url) [[ $# -ge 2 ]] || die "--start-url needs a URL"; START_URL="$2"; shift 2 ;;
     --start-url=*) START_URL="${1#*=}"; shift ;;
     -h|--help) sed -n 2,2p "$0"; exit 0 ;;
+    --model|--max-steps|--receipts-dir|--allow-overlay) [[ $# -ge 2 ]] || die "$1 needs a value"; EXTRA+=("$1" "$2"); shift 2 ;;
     --*) EXTRA+=("$1"); shift ;;
     *) if [[ -z "$TASK" ]]; then TASK="$1"; else EXTRA+=("$1"); fi; shift ;;
   esac
@@ -119,7 +120,8 @@ print(json.dumps({"download": {"default_directory": d, "prompt_for_download": Fa
                   "savefile": {"default_directory": d}, "profile": {"default_content_setting_values": {"automatic_downloads": 1}}}))' \
       >"$profile/Default/Preferences"
   fi
-  "$BROWSER_BIN" "--user-data-dir=$profile" --use-mock-keychain --password-store=basic --no-first-run --no-default-browser-check \
+  local debug=(); [[ "$1" == "work" && -n "${WORK_DEBUG_PORT:-}" ]] && debug=("--remote-debugging-port=$WORK_DEBUG_PORT" "--remote-debugging-address=127.0.0.1")
+  "$BROWSER_BIN" "--user-data-dir=$profile" ${debug[@]+"${debug[@]}"} --use-mock-keychain --password-store=basic --no-first-run --no-default-browser-check \
     "--window-position=$2,$3" "--window-size=$4,$5" "--app=$6" >/dev/null 2>&1 &
   LAST_PID=$!; PIDS+=("$LAST_PID")
 }
@@ -157,6 +159,9 @@ if [[ -n "$RUN_DIR" ]]; then
   echo "run dir: $RUN_DIR"
   echo "verify:  uv run python -m agent verify $RUN_DIR"
   if uv run python -m agent verify "$RUN_DIR" >"$TMP/verify.log" 2>&1; then echo "verify result: PASS (offline signature check)"; else echo "verify result: FAIL"; tail -5 "$TMP/verify.log"; RESULT=1; fi
+fi
+if [[ -n "${WORK_DEBUG_PORT:-}" ]]; then  # opt-in, for checking the outcome from outside the agent (loopback only)
+  echo "work browser url: $(curl -fsS -m 3 "http://127.0.0.1:$WORK_DEBUG_PORT/json/list" 2>/dev/null | python3 -c 'import json,sys; print(next((t["url"] for t in json.load(sys.stdin) if t.get("type")=="page"), ""))' 2>/dev/null)"
 fi
 if [[ $DEMO -eq 1 ]]; then
   if curl -fsS -m 5 "${BANK_URL}events" | grep -q '"statement_downloaded"'; then

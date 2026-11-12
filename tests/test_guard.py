@@ -24,6 +24,16 @@ def check_region(windows, region, pid, allow=frozenset(), menubar=True):
     return _check_region(windows + ([MENUBAR] if menubar and MENUBAR not in windows else []), region, pid, allow)
 
 
+class ClipTests(unittest.TestCase):
+    def test_region_starts_below_menu_bar(self):
+        from agent.screen import clip_below_menubar
+        self.assertEqual(clip_below_menubar([MENUBAR, MINE], REGION), Region(0, 30, 1400, 1050))
+
+    def test_no_menu_bar_leaves_region(self):
+        from agent.screen import clip_below_menubar
+        self.assertEqual(clip_below_menubar([MINE], REGION), REGION)
+
+
 class RegionTests(unittest.TestCase):
     def test_covered_by_own_window_is_ok(self):
         self.assertIsNone(check_region([MINE, OTHER], REGION, ME))

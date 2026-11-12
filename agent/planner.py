@@ -18,10 +18,11 @@ from .egress import PLANNER_BASE_URL, check_planner_url
 
 MODEL = "Qwen/Qwen3.8-27B"
 MAX_COMPLETION_TOKENS = 600
+GLM_MAX_COMPLETION_TOKENS = 2500  # headroom for its (low-effort) reasoning tokens
 
 SYSTEM_PROMPT = """You operate a computer for the user by looking at screenshots.
 
-The screenshot is the work area: the left 1400x1080 region of the screen. You choose ONE action per step. Reply with a single JSON object and nothing else.
+The screenshot is the work window (a browser or app window), nothing else. You choose ONE action per step. Reply with a single JSON object and nothing else.
 
 Actions:
 {"thought": "...", "action": "click",  "target": "the Statements link"}
@@ -34,7 +35,9 @@ Actions:
 
 Rules:
 - Describe every click target by its visible text, for example "the Download PDF button" or "the Settings link". Never give coordinates. Name exactly one thing, using the label as it is written on screen.
-- "type" types into the field that already has focus, so click the field first, in an earlier step.
+- Name a text field by its visible label, for example "the To field" or "the Search Wikipedia box". Name a link or button by the exact words printed on it ("the View October 2026 button", not "the statement link").
+- "type" types into the field that already has focus, so click the field first, in an earlier step. Once the screenshot shows your text in the field, do not type it again: go on to the next field or button.
+- To submit a typed search or form, either set "enter": true in the same type action or click the submit button; then check the next screenshot.
 - Choose "done" only when the goal is visibly complete on the current screenshot, and say what you saw in "summary".
 - If the history says the screen did not change after your last action, that action probably did nothing: try something different.
 - Keep "thought" to one short sentence."""
@@ -224,7 +227,8 @@ class Planner:
 
     async def __aenter__(self):
         install_reply_key_capture()
-        self._client = InferenceClient(self._api_key, e2ee=self.e2ee)
+        # The only URL the SDK may use is the one that passed the egress check.
+        self._client = InferenceClient(self._api_key, base_url=self.base_url, e2ee=self.e2ee)
         await self._client.__aenter__()
         return self
 
@@ -240,6 +244,12 @@ class Planner:
         self._model_signers = {s.lower() for s in self.attestation["model_signers"]}
         self._gateway_signer = self.attestation["gateway"]["signer"].lower()
         return self.attestation
+
+    def _model_options(self) -> dict:
+        """Models that reason by default get their reasoning turned down; Qwen has it switched off."""
+        if self.model.startswith("z-ai/"):
+            return {"reasoning_effort": "low"}
+        return {"chat_template_kwargs": {"enable_thinking": False}}
 
     def _messages(self, task: str, history: list[str], screen_note: str | None, png: bytes) -> list[dict]:
         lines = [f"Goal: {task}", ""]
@@ -268,10 +278,10 @@ class Planner:
             completion = await self._client.chat.completions.create(
                 model=self.model,
                 messages=self._messages(task, history, screen_note, png),
-                max_completion_tokens=MAX_COMPLETION_TOKENS,
+                max_completion_tokens=MAX_COMPLETION_TOKENS if not self.model.startswith("z-ai/") else GLM_MAX_COMPLETION_TOKENS,
                 temperature=0,
                 response_format=ACTION_SCHEMA,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                extra_body=self._model_options(),
             )
         except Exception as error:
             raise PlannerUnverified(f"planner call failed: {type(error).__name__}: {error}") from error

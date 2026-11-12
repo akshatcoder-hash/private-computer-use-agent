@@ -55,6 +55,9 @@ def check_step(run_dir: str, step: dict, attestation: dict) -> tuple[str, list[s
     if "verification" not in step:
         if "error" in step and "action_performed" not in step:
             return "REFUSED", []
+        # Stopped by the window guard before the planner was called, and nothing was performed.
+        if "guard_blocked" in step.get("events", []) and "action_performed" not in step:
+            return "REFUSED", []
         return "FAIL", ["no verification record, yet the step is not a recorded refusal"]
     v, problems = step["verification"], []
     try:
@@ -147,7 +150,7 @@ def verify_run(run_dir: str, out=sys.stdout) -> bool:
         action = step.get("planner", {}).get("action", {})
         label = action.get("action", "-") + (f" {action.get('target', '')}".rstrip() if action.get("action") == "click" else "")
         if status == "REFUSED":
-            print(f"{step['step']:<5}{'REFUSED':<9}{'-':<13}{'-':<8}{'-':<10}{'-':<8}{'-':<11}agent stopped without acting: {step.get('error', '')[:60]}", file=out)
+            print(f"{step['step']:<5}{'REFUSED':<9}{'-':<13}{'-':<8}{'-':<10}{'-':<8}{'-':<11}agent stopped without acting: {(step.get('error') or step.get('reason') or '')[:60]}", file=out)
             continue
         print(f"{step['step']:<5}{status:<9}{v.get('signature_kind', '?'):<13}{bad('hash'):<8}{bad('signature'):<10}"
               f"{bad('signer'):<8}{action_state:<11}{label}", file=out)
