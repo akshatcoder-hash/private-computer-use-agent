@@ -56,8 +56,11 @@ class Run:
                 stream.write(reply_key + "\n")
 
     def write_screenshot(self, step: int, png: bytes):
-        with open(self._path(f"step-{step}.png"), "wb") as stream:
+        # A plaintext screenshot of the user's screen: owner-only.
+        fd = os.open(self._path(f"step-{step}.png"), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as stream:
             stream.write(png)
+        os.chmod(self._path(f"step-{step}.png"), 0o600)
 
     def _write_json(self, name: str, value):
         tmp = self._path(name + ".tmp")

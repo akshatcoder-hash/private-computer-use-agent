@@ -45,8 +45,22 @@ PERM="$(uv run python -c 'from agent import screen; print(", ".join(screen.missi
   || die "could not start the agent environment: $PERM"
 [[ -z "$PERM" ]] || die "this terminal app lacks: $PERM. Open System Settings > Privacy & Security, switch this terminal on under each of those entries, then quit and reopen the terminal and run this again."
 
+# macOS asks once whether this terminal may control "System Events" (used to bring our window to the front).
+AUTO_ERR="$(osascript -e 'tell application "System Events" to get name of first process' 2>&1 >/dev/null)" \
+  || die "this terminal is not allowed to control System Events (${AUTO_ERR:-no detail}). Open System Settings > Privacy & Security > Automation, find this terminal app, switch on \"System Events\", then run this again."
+
+# The layout is the work area (1400 x 1080 points) plus the receipt panel (520 x 1080): 1920 x 1080 at least.
+SIZE="$(uv run python -c 'from agent import screen; w, h = screen.display_size(); print(w, h)' 2>&1)" \
+  || die "could not read the display size: $SIZE"
+read -r DISPLAY_W DISPLAY_H <<<"$SIZE"
+if [[ "${DISPLAY_W:-0}" -lt 1920 || "${DISPLAY_H:-0}" -lt 1080 ]]; then
+  die "the main display is ${DISPLAY_W}x${DISPLAY_H} points; this needs at least 1920x1080 (work area 1400 + panel 520, 1080 high). Use a larger display or a larger scaled resolution in System Settings > Displays."
+fi
+
 # Bookkeeping so we stop only what we started
 PIDS=(); TMPS=()
+ATOM_LOG="$HOME/Library/Logs/private-agent/atom.log"   # kept after the run, on purpose: it is how a failed start is diagnosed
+mkdir -p "$(dirname "$ATOM_LOG")"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/private-agent.XXXXXX")"; TMPS+=("$TMP")
 cleanup() {
   trap - EXIT INT TERM
@@ -61,11 +75,12 @@ trap cleanup EXIT
 trap 'exit 130' INT TERM
 
 up() { curl -fsS -m 2 "$1" >/dev/null 2>&1; }
+logpath() { if [[ "$1" == atom ]]; then echo "$ATOM_LOG"; else echo "$TMP/$1.log"; fi; }
 wait_up() { # url seconds pid label
   local i=0
   while ! up "$1"; do
-    kill -0 "$3" 2>/dev/null || die "$4 exited before it was ready. Log: $TMP/$4.log"
-    i=$((i + 1)); [[ $i -lt $(( $2 * 2 )) ]] || die "$4 did not become ready within $2 s. Log: $TMP/$4.log"
+    kill -0 "$3" 2>/dev/null || die "$4 exited before it was ready. Log: $(logpath "$4")"
+    i=$((i + 1)); [[ $i -lt $(( $2 * 2 )) ]] || die "$4 did not become ready within $2 s. Log: $(logpath "$4")"
     sleep 0.5
   done
 }
@@ -76,20 +91,22 @@ if up "$ATOM_URL/health"; then
 else
   echo "Atom: starting it on $ATOM_URL. On the first run this downloads the runtime and about 150 MB of weights."
   echo "      That is a one-time step and can take several minutes; later runs start in seconds."
-  ATOM_PORT="$ATOM_PORT" atom/start.sh >"$TMP/atom.log" 2>&1 &
+  echo "      Atom log: $ATOM_LOG"
+  ATOM_PORT="$ATOM_PORT" atom/start.sh >"$ATOM_LOG" 2>&1 &
   PIDS+=("$!")
   wait_up "$ATOM_URL/health" 1800 "$!" atom
   echo "Atom: ready."
 fi
 
 # 6. Panel and demo bank
+PY="$(uv run python -c 'import sys; print(sys.executable)')"  # the project's interpreter, run directly so cleanup kills the server itself
 if up "$PANEL_URL/"; then echo "panel: already running on $PANEL_URL."; else
   uv run python panel/server.py --receipts receipts --port "$PANEL_PORT" >"$TMP/panel.log" 2>&1 &
   PIDS+=("$!"); wait_up "$PANEL_URL/" 30 "$!" panel
 fi
 if [[ $DEMO -eq 1 || "$START_URL" == "$BANK_URL"* ]]; then
   if up "$BANK_URL"; then echo "demo bank: already running on $BANK_URL."; else
-    python3 demo/serve.py --port "$BANK_PORT" >"$TMP/bank.log" 2>&1 &
+    "$PY" demo/serve.py --port "$BANK_PORT" >"$TMP/bank.log" 2>&1 &
     PIDS+=("$!"); wait_up "$BANK_URL" 30 "$!" bank
   fi
   curl -fsS -m 5 -X POST "${BANK_URL}reset" >/dev/null || die "could not reset the demo bank's event log at $BANK_URL"
@@ -113,7 +130,7 @@ DOWNLOADS="$TMP/downloads"; mkdir -p "$DOWNLOADS"
 open_window() { # name x y w h url   (profile dir name = $1) ; sets LAST_PID
   local profile="$TMP/profile-$1"; mkdir -p "$profile/Default"
   if [[ "$1" == "work" ]]; then
-    DL="$DOWNLOADS" python3 -c '
+    DL="$DOWNLOADS" uv run python -c '
 import json, os
 d = os.environ["DL"]
 print(json.dumps({"download": {"default_directory": d, "prompt_for_download": False, "directory_upgrade": True},
@@ -147,7 +164,7 @@ echo "downloads from the work-area browser land in: $DOWNLOADS (temporary; remov
 # 8. Run
 LOG="$TMP/agent.log"
 echo
-PYTHONUNBUFFERED=1 uv run python -m agent run "$TASK" --no-browser --work-pid "$WORK_WIN" --start-url "$START_URL" --receipts-dir receipts ${EXTRA[@]+"${EXTRA[@]}"} 2>&1 | tee "$LOG"
+PYTHONUNBUFFERED=1 uv run python -m agent run "$TASK" --no-browser --work-pid "$WORK_WIN" --work-profile "$TMP/profile-work" --start-url "$START_URL" --receipts-dir receipts ${EXTRA[@]+"${EXTRA[@]}"} 2>&1 | tee "$LOG"
 RC=${PIPESTATUS[0]}
 
 # 9. Report
@@ -158,10 +175,10 @@ echo "downloaded files: $(ls -1 "$DOWNLOADS" 2>/dev/null | tr '\n' ' ')(in $DOWN
 if [[ -n "$RUN_DIR" ]]; then
   echo "run dir: $RUN_DIR"
   echo "verify:  uv run python -m agent verify $RUN_DIR"
-  if uv run python -m agent verify "$RUN_DIR" >"$TMP/verify.log" 2>&1; then echo "verify result: PASS (offline signature check)"; else echo "verify result: FAIL"; tail -5 "$TMP/verify.log"; RESULT=1; fi
+  if uv run python -m agent verify "$RUN_DIR" >"$TMP/verify.log" 2>&1; then echo "verify result: PASS (every step signed, bound to this run, and consistent)"; else echo "verify result: FAIL"; tail -5 "$TMP/verify.log"; RESULT=1; fi
 fi
 if [[ -n "${WORK_DEBUG_PORT:-}" ]]; then  # opt-in, for checking the outcome from outside the agent (loopback only)
-  echo "work browser url: $(curl -fsS -m 3 "http://127.0.0.1:$WORK_DEBUG_PORT/json/list" 2>/dev/null | python3 -c 'import json,sys; print(next((t["url"] for t in json.load(sys.stdin) if t.get("type")=="page"), ""))' 2>/dev/null)"
+  echo "work browser url: $(curl -fsS -m 3 "http://127.0.0.1:$WORK_DEBUG_PORT/json/list" 2>/dev/null | uv run python -c 'import json,sys; print(next((t["url"] for t in json.load(sys.stdin) if t.get("type")=="page"), ""))' 2>/dev/null)"
 fi
 if [[ $DEMO -eq 1 ]]; then
   if curl -fsS -m 5 "${BANK_URL}events" | grep -q '"statement_downloaded"'; then

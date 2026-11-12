@@ -1,7 +1,11 @@
+import asyncio
+import json
 import unittest
 from types import SimpleNamespace as NS
+from unittest import mock
 
-from agent.planner import Planner, PlannerUnverified, parse_action, sha256_hex
+from agent import planner as planner_module
+from agent.planner import Planner, PlannerUnverified, parse_action, request_binding, sha256_hex
 
 MODEL = "Qwen/Qwen3.8-27B"
 REQ, RESP = b"request", b"response"
@@ -40,6 +44,76 @@ class Check(unittest.TestCase):
     def test_hash_mismatch_refused(self):
         with self.assertRaises(PlannerUnverified):
             planner()._check(verified("provider_tee", "aa"), REQ, RESP + b"x")
+
+
+PNG = b"\x89PNG fake"
+SIGNED = {"thought": "t", "action": "click", "target": "the Save button"}
+
+
+class FakeClient:
+    """Stands in for the SDK client: returns one completion whose parsed content is `sdk_text`."""
+
+    def __init__(self, sdk_text, user_sent):
+        self.sdk_text, self.user_sent = sdk_text, user_sent
+        body = {"model": MODEL, "user": user_sent}
+        self.request, self.response = json.dumps(body).encode(), b"wire-response"
+        self.chat = NS(completions=NS(create=self.create))
+
+    async def create(self, **kwargs):
+        self.kwargs = kwargs
+        planner_module._CAPTURED_KEYS.append(object())
+        msg = NS(content=self.sdk_text)
+        return NS(id="c1", choices=[NS(message=msg)], usage=None)
+
+    def _get_response_record(self, id):
+        async def body():
+            return self.response
+        return NS(request_body=self.request, response_body=body())
+
+    async def verify_response(self, id):
+        text = f"{MODEL}:{sha256_hex(self.request)}:{sha256_hex(self.response)}"
+        return NS(signature_kind="provider_tee", signature=NS(
+            signer=NS(signing_address="aa", signing_algo="ed25519"), signed_text=text, signature="00"))
+
+
+def run_plan(sdk_text, wire_action=SIGNED, user_sent=None):
+    p = planner()
+    p.attestation = {}
+    bind = request_binding("r1", 2, sha256_hex(PNG))
+    p._client = FakeClient(sdk_text, user_sent or bind)
+    with mock.patch.object(planner_module, "serialize_reply_key", return_value="ed25519:00"), \
+            mock.patch.object(planner_module, "action_from_wire", return_value=wire_action):
+        return p, asyncio.run(p.plan(PNG, "task", [], run_id="r1", step=2))
+
+
+class ActOnSignedBytes(unittest.TestCase):
+    def test_matching_action_is_returned_from_the_wire_bytes(self):
+        p, result = run_plan(json.dumps(SIGNED))
+        self.assertEqual(result.action, SIGNED)
+        self.assertEqual(p._client.kwargs["user"], request_binding("r1", 2, sha256_hex(PNG)))
+
+    def test_sdk_parsed_action_that_differs_from_the_signed_bytes_is_refused(self):
+        evil = dict(SIGNED, target="the Delete account button")
+        with self.assertRaises(PlannerUnverified) as caught:
+            run_plan(json.dumps(evil))
+        self.assertIn("differs from the action in the signed reply", str(caught.exception))
+
+    def test_unparseable_sdk_content_is_refused(self):
+        with self.assertRaises(PlannerUnverified):
+            run_plan("not json")
+
+    def test_undecryptable_wire_is_refused(self):
+        p = planner()
+        p.attestation = {}
+        p._client = FakeClient(json.dumps(SIGNED), request_binding("r1", 2, sha256_hex(PNG)))
+        with mock.patch.object(planner_module, "serialize_reply_key", return_value="ed25519:00"):
+            with self.assertRaises(PlannerUnverified):
+                asyncio.run(p.plan(PNG, "task", [], run_id="r1", step=2))
+
+    def test_request_without_the_binding_is_refused(self):
+        with self.assertRaises(PlannerUnverified) as caught:
+            run_plan(json.dumps(SIGNED), user_sent="other:1:00")
+        self.assertIn("binding", str(caught.exception))
 
 
 class Parse(unittest.TestCase):

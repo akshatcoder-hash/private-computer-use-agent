@@ -9,6 +9,7 @@ from . import grounder, screen
 from .egress import PLANNER_BASE_URL, check_atom_url
 from .planner import Planner, PlannerUnverified, sha256_hex
 from .receipts import Run
+from .screen_keys import check_key_allowed
 
 SETTLE_SECONDS = 0.9
 WORK_AREA = screen.Region(0, 0, 1400, 1080)
@@ -43,7 +44,8 @@ class Guard:
         return screen.guard_point(x, y, self.pid, self.allow)
 
     def check_keys(self):
-        return screen.guard_keyboard(self.pid)
+        """Keystrokes get BOTH checks: the work browser has focus and nothing foreign covers the work area."""
+        return screen.guard_keyboard(self.pid, self.region, self.allow)
 
     def passes(self, what: str, check) -> None:
         """Run check; on failure bring the work window to the front once, wait, re-check; raise if still failing."""
@@ -110,6 +112,9 @@ def _act(action: dict, png: bytes, step: int, run: Run, region: screen.Region, g
             screen.press("enter", before=guard.strict("type", guard.check_keys))
         return f"typed {len(action['text'])} characters" + (" and pressed enter" if action.get("enter") else "")
     if kind == "key":
+        refused = check_key_allowed(action["key"])
+        if refused:
+            return f"FAILED: {refused}; nothing was pressed"
         guard.passes("key", guard.check_keys)
         screen.press(action["key"], before=guard.strict("key", guard.check_keys))
         return f"pressed {action['key']}"
@@ -180,7 +185,7 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
             history[-1] += " The screen did not change."
         try:
             run.event("screenshot_sent", step, to="near-enclave", host=urlparse(PLANNER_BASE_URL).netloc, bytes=len(png))
-            plan = await planner.plan(png, task, history, note)
+            plan = await planner.plan(png, task, history, note, run_id=run.run_id, step=step)
         except PlannerUnverified as error:
             run.event("planner_unverified", step, error=str(error))
             log(f"step {step}: NOT VERIFIED, stopping: {error}")

@@ -16,18 +16,18 @@
   "bytes": 2330,
   "planner": {
     "model": "Qwen/Qwen3.8-27B",
-    "completion_id": "dcf7c0d5b02c4fb296faad5fbc2a1a63",
+    "completion_id": "47dd2f455e674af18621f54137741d41",
     "e2ee": true,
-    "latency_ms": 1497,
-    "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully. The goal is complete.",
+    "latency_ms": 1392,
+    "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
     "action": {
-      "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully. The goal is complete.",
+      "thought": "The screen shows 'Saved - changes saved', confirming the changes were saved successfully.",
       "action": "done",
-      "summary": "The screen displays 'Saved - changes saved', confirming the settings changes were saved successfully."
+      "summary": "Settings were opened and changes saved; the screen displays 'Saved - changes saved'."
     },
     "usage": {
-      "prompt_tokens": 527,
-      "completion_tokens": 54,
+      "prompt_tokens": 695,
+      "completion_tokens": 49,
       "reasoning_tokens": 0
     }
   },
@@ -39,10 +39,10 @@
     "signer": "89154a43a47684742c3d1753252bb6f49f61da9d8c84fc9b1def2df130cb2d93",
     "signer_matches_attested_model": true,
     "signer_matches_attested_gateway": false,
-    "signed_text": "Qwen/Qwen3.8-27B:3f4324b765fa414804db5144bb14ed8c1edbf1aec959ed7b021a033c737a24a7:4efa07c8f430e6234da0f264e2e1ac72925f4540bd185b47ebe16197092935bb",
-    "signature": "15dbfd704763442a8c85d5c113b1ad96cab4912048a5492e79a32a72ee0d900925b10a81118b445622987ca1781f1de8d423baa10eda4be976aff7f3ac65de08",
-    "request_sha256": "3f4324b765fa414804db5144bb14ed8c1edbf1aec959ed7b021a033c737a24a7",
-    "response_sha256": "4efa07c8f430e6234da0f264e2e1ac72925f4540bd185b47ebe16197092935bb"
+    "signed_text": "Qwen/Qwen3.8-27B:ccbf7654c79edacf389af297907511bfe0f44d749d0fd82fb09db0ecd17f05ec:ced9705d89f1fb93e908921e2193021c4df55004b5dec0b3b23d55e2f00b4a52",
+    "signature": "b13a47f9aacb57df4a419b0a46e78fdad4904129c6b4b4b81f4521a86694d3ad1a695bfc8e422034e0fc7ef964d4c84cfc9d03c3f26dcb2e43f6be089887d204",
+    "request_sha256": "ccbf7654c79edacf389af297907511bfe0f44d749d0fd82fb09db0ecd17f05ec",
+    "response_sha256": "ced9705d89f1fb93e908921e2193021c4df55004b5dec0b3b23d55e2f00b4a52"
   },
   "action_performed": "done"
 }

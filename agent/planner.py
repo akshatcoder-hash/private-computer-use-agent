@@ -15,6 +15,7 @@ from nearai_inference_sdk.core import e2ee as _sdk_e2ee
 from nearai_inference_sdk.core import e2ee_request as _sdk_e2ee_request
 
 from .egress import PLANNER_BASE_URL, check_planner_url
+from .screen_keys import ALLOWED_KEYS
 
 MODEL = "Qwen/Qwen3.8-27B"
 MAX_COMPLETION_TOKENS = 600
@@ -34,6 +35,7 @@ Actions:
 {"thought": "...", "action": "fail",   "reason": "..."}
 
 Rules:
+- "key" presses ONE key. Allowed keys only: enter, return, tab, escape, backspace, delete, up, down, left, right, pageup, pagedown, space, and the single chord cmd+a (select all). Any other key or shortcut is refused and nothing happens.
 - Describe every click target by its visible text, for example "the Download PDF button" or "the Settings link". Never give coordinates. Name exactly one thing, using the label as it is written on screen.
 - Name a text field by its visible label, for example "the To field" or "the Search Wikipedia box". Name a link or button by the exact words printed on it ("the View October 2026 button", not "the statement link").
 - "type" types into the field that already has focus, so click the field first, in an earlier step. Once the screenshot shows your text in the field, do not type it again: go on to the next field or button.
@@ -55,7 +57,7 @@ ACTION_SCHEMA = {
                 "target": {"type": "string"},
                 "text": {"type": "string"},
                 "enter": {"type": "boolean"},
-                "key": {"type": "string"},
+                "key": {"type": "string", "enum": list(ALLOWED_KEYS)},
                 "direction": {"type": "string", "enum": ["up", "down"]},
                 "summary": {"type": "string"},
                 "reason": {"type": "string"},
@@ -166,6 +168,12 @@ def parse_action(text: str) -> dict:
     raise ValueError(f"no valid action in the planner reply: {text[:200]!r}")
 
 
+def request_binding(run_id: str, step: int, screenshot_sha256: str) -> str:
+    """The clear-text `user` field of the chat request. The enclave signs the request bytes, so this ties the
+    signature to one run, one step and one screenshot."""
+    return f"{run_id}:{step}:{screenshot_sha256}"
+
+
 def _identity(signer) -> dict:
     return {"signing_algo": signer.signing_algo, "signer": signer.signing_address}
 
@@ -215,9 +223,12 @@ class PlanResult:
 class Planner:
     def __init__(self, api_key: str, model: str = MODEL, e2ee: bool = True, allow_gateway_signature: bool = False,
                  base_url: str = PLANNER_BASE_URL):
+        if e2ee is not True:
+            # Without E2EE the plaintext screenshot would go to the gateway and be stored in step-N.request.bin.
+            raise ValueError("the planner only runs with end-to-end encryption (e2ee=True); there is no plaintext path")
         self.base_url = check_planner_url(base_url)
         self.model = model
-        self.e2ee = e2ee
+        self.e2ee = True
         self.allow_gateway = allow_gateway_signature
         self._api_key = api_key
         self._client: InferenceClient | None = None
@@ -269,9 +280,11 @@ class Planner:
             ]},
         ]
 
-    async def plan(self, png: bytes, task: str, history: list[str], screen_note: str | None = None) -> PlanResult:
+    async def plan(self, png: bytes, task: str, history: list[str], screen_note: str | None = None, *,
+                   run_id: str, step: int) -> PlanResult:
         if self.attestation is None:
             raise PlannerUnverified("planner attestation was not verified before the call")
+        bind = request_binding(run_id, step, sha256_hex(png))
         started = time.monotonic()
         _CAPTURED_KEYS.clear()
         try:
@@ -281,6 +294,7 @@ class Planner:
                 max_completion_tokens=MAX_COMPLETION_TOKENS if not self.model.startswith("z-ai/") else GLM_MAX_COMPLETION_TOKENS,
                 temperature=0,
                 response_format=ACTION_SCHEMA,
+                user=bind,  # clear text under E2EE, so the enclave signs it with the request bytes
                 extra_body=self._model_options(),
             )
         except Exception as error:
@@ -301,18 +315,28 @@ class Planner:
         except Exception as error:
             raise PlannerUnverified(f"signature verification failed: {type(error).__name__}: {error}") from error
         verification = self._check(verified, request_bytes, response_bytes)
-        reply_key = None
-        if self.e2ee:
-            if len(_CAPTURED_KEYS) != 1:
-                raise PlannerUnverified(f"expected exactly one E2EE reply key for this call, saw {len(_CAPTURED_KEYS)}")
-            reply_key = serialize_reply_key(_CAPTURED_KEYS[0])
-
-        message = completion.choices[0].message
         try:
-            action = parse_action(message.content or "")
-        except ValueError as error:
-            # Verified, but unusable. Nothing is executed; the loop records it and stops.
-            raise PlannerUnverified(f"verified reply was not a valid action: {error}") from error
+            sent_user = json.loads(request_bytes.decode("utf-8")).get("user")
+        except ValueError:
+            sent_user = None
+        if sent_user != bind:
+            raise PlannerUnverified("the signed request does not carry this run, step and screenshot binding")
+        if len(_CAPTURED_KEYS) != 1:
+            raise PlannerUnverified(f"expected exactly one E2EE reply key for this call, saw {len(_CAPTURED_KEYS)}")
+        reply_key = serialize_reply_key(_CAPTURED_KEYS[0])
+
+        # Act on the signed bytes, not on the SDK's parsed object: decrypt the exact response that was signed
+        # (the path `verify` uses) and require it to agree with what the SDK handed back.
+        try:
+            action = action_from_wire(response_bytes, reply_key)
+        except Exception as error:
+            raise PlannerUnverified(f"the signed reply could not be decrypted and parsed: {type(error).__name__}: {error}") from error
+        try:
+            parsed = parse_action(completion.choices[0].message.content or "")
+        except ValueError:
+            parsed = None
+        if parsed != action:
+            raise PlannerUnverified("the action parsed by the SDK differs from the action in the signed reply bytes")
         usage = completion.usage
         return PlanResult(
             action=action,

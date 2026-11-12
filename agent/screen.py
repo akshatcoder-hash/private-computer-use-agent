@@ -8,6 +8,8 @@ from dataclasses import dataclass
 
 import Quartz
 
+from .screen_keys import check_key_allowed, normalize_key
+
 
 @dataclass(frozen=True)
 class Region:
@@ -184,8 +186,22 @@ def guard_point(x: float, y: float, work_pid: int, allow: frozenset[str] | None 
     return check_point(list_windows(), x, y, work_pid, allow)
 
 
-def guard_keyboard(work_pid: int) -> str | None:
-    return check_frontmost(work_pid)
+def check_keyboard(windows: list[Win], region: Region, work_pid: int, frontmost: int | None,
+                   allow: frozenset[str] = frozenset(), focus_note: str = "") -> str | None:
+    """Keystrokes need BOTH: the work browser has focus AND nothing foreign is in front of the work area
+    (a Spotlight or Raycast panel takes focus without being the 'frontmost application' in every case, and
+    a notification can sit over the page). Pure: the caller passes the window list and the frontmost pid."""
+    if frontmost != work_pid:
+        return f"the focused app is {focus_note or 'unknown'} (pid {frontmost}), not the work browser"
+    return check_region(windows, Region(region.x, region.y, region.width, region.height), work_pid, allow)
+
+
+def guard_keyboard(work_pid: int, region: Region, allow: frozenset[str] | None = None) -> str | None:
+    allow = allowed_overlays_from_env() if allow is None else allow
+    focus = check_frontmost(work_pid)
+    if focus is not None:
+        return focus
+    return check_keyboard(list_windows(), region, work_pid, work_pid, allow)
 
 
 def bring_to_front(pid: int):
@@ -237,20 +253,20 @@ def type_text(text: str, before_each=None):
         time.sleep(0.025)
 
 
-KEYCODES = {"enter": 36, "return": 36, "tab": 48, "escape": 53, "space": 49, "backspace": 51,
-            "up": 126, "down": 125, "left": 123, "right": 124, "pagedown": 121, "pageup": 116,
-            "a": 0, "c": 8, "v": 9, "l": 37, "t": 17, "w": 13, "f": 3, "n": 45, "s": 1}
+KEYCODES = {"enter": 36, "return": 36, "tab": 48, "escape": 53, "space": 49, "backspace": 51, "delete": 117,
+            "up": 126, "down": 125, "left": 123, "right": 124, "pagedown": 121, "pageup": 116, "a": 0}
 MODIFIERS = {"cmd": Quartz.kCGEventFlagMaskCommand, "shift": Quartz.kCGEventFlagMaskShift,
              "alt": Quartz.kCGEventFlagMaskAlternate, "ctrl": Quartz.kCGEventFlagMaskControl}
 
 
 def press(key: str, before=None):
-    """Press a key such as "enter" or a chord such as "cmd+a"."""
+    """Press an allowlisted key (agent/screen_keys.py): enter, tab, arrows, ... or cmd+a. Nothing else."""
+    reason = check_key_allowed(key)
+    if reason:
+        raise ValueError(reason)
     if before:
         before()
-    *modifiers, name = key.lower().replace(" ", "").split("+")
-    if name not in KEYCODES or any(m not in MODIFIERS for m in modifiers):
-        raise ValueError(f"unsupported key: {key}")
+    *modifiers, name = normalize_key(key).split("+")
     flags = 0
     for modifier in modifiers:
         flags |= MODIFIERS[modifier]
