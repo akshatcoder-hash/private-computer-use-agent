@@ -31,6 +31,25 @@ class AtomUrl(unittest.TestCase):
         check_atom_url(grounder.ATOM_URL)
 
 
+class NoSocketForBadAtomUrl(unittest.TestCase):
+    def test_ground_raises_before_any_socket_is_opened(self):
+        import socket
+        from unittest import mock
+        png = b"\x89PNG" + b"\0" * 32
+        for url in ("http://example.com:8760", "http://localhost:8760", "http://192.168.1.5:8760"):
+            with mock.patch.object(grounder, "ATOM_URL", url), \
+                    mock.patch.object(socket.socket, "connect", side_effect=AssertionError("socket opened")) as connect, \
+                    mock.patch.object(socket, "create_connection", side_effect=AssertionError("socket opened")) as create, \
+                    mock.patch.object(socket, "getaddrinfo", side_effect=AssertionError("DNS lookup")) as dns:
+                with self.assertRaises(EgressError, msg=url):
+                    grounder.ground("click the button", png)
+                with self.assertRaises(EgressError, msg=url):
+                    grounder.health()
+                connect.assert_not_called()
+                create.assert_not_called()
+                dns.assert_not_called()
+
+
 class PlannerUrl(unittest.TestCase):
     def test_exact_url(self):
         self.assertEqual(PLANNER_BASE_URL, "https://cloud-api.near.ai/v1")

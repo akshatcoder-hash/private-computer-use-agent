@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # seconds to wait AFTER writing an event of this type, before the next one
-DELAY = {"run_started": 0.4, "attestation": 0.8, "step_started": 2.5,
+DELAY = {"run_started": 0.4, "attestation": 0.8, "step_started": 0.1, "screenshot_sent": 2.4,
          "planner_verified": 0.35, "planner_unverified": 0.8,
          "grounded": 0.15, "acted": 0.7, "run_finished": 0.0}
 
@@ -48,6 +48,8 @@ def main():
             print(ev["type"], flush=True)
             nxt = events[i + 1]["type"] if i + 1 < len(events) else None
             d = DELAY.get(ev["type"], 0.3)
+            if ev["type"] == "screenshot_sent" and nxt == "grounded":
+                d = 0.05
             if ev["type"] == "planner_verified" and nxt == "run_finished":
                 d = 0.6
             time.sleep(d / max(a.speed, 0.01))

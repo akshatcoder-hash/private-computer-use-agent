@@ -37,6 +37,7 @@ header{padding:16px 20px 12px;border-bottom:1px solid var(--line);background:lin
 .t.zero{border:2px solid var(--green);background:var(--green-bg)}
 .t.zero b{font-size:52px;color:var(--green);margin-top:-4px}
 .t.zero span{color:var(--text)}
+.t.zero.alarm{border-color:var(--red);background:var(--red-bg)} .t.zero.alarm b{color:var(--red)}
 .enc{margin-top:10px;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:8px 14px 6px}
 .enc h2{font:600 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);display:flex;justify-content:space-between;padding-bottom:5px}
 .enc h2 em{font-style:normal;color:var(--green)}
@@ -95,7 +96,7 @@ footer.stopped.red b{color:var(--red)}
     <div class="tally">
       <div class="t ne"><b id="n-ne">0</b><span>&rarr; NEAR enclave<br>(<span id="n-ver" style="display:inline;margin:0;font:inherit;color:inherit">0</span> verified)</span></div>
       <div class="t at"><b id="n-at">0</b><span>&rarr; Atom on<br>this Mac</span></div>
-      <div class="t zero"><b>0</b><span>&rarr; anywhere else</span></div>
+      <div class="t zero" id="t-zero"><b id="n-else">0</b><span>&rarr; anywhere else</span></div>
     </div>
     <div class="enc" id="enc"></div>
   </header>
@@ -108,7 +109,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const mid=(s,h=8,t=6)=>{s=String(s==null?"":s);return s.length>h+t+1?s.slice(0,h)+"…"+s.slice(-t):s};
 const num=v=>typeof v==="number"&&isFinite(v);
-function fresh(){return{idle:true,run:null,att:null,steps:new Map(),fin:null,ov:{},raw:{},rawText:{}}}
+function fresh(){return{idle:true,run:null,att:null,steps:new Map(),fin:null,sends:[],ov:{},raw:{},rawText:{}}}
 let S=fresh();
 const els=new Map();
 
@@ -123,6 +124,7 @@ function handle(ev){
     case"step_started":if(num(ev.step)){const s=stepOf(ev.step);s.cap=ev.screenshot||{};s.t0=Date.now();s.sent=true;s.start=ev}break;
     case"planner_verified":if(num(ev.step)){const s=stepOf(ev.step);s.ver=ev}break;
     case"planner_unverified":if(num(ev.step)){const s=stepOf(ev.step);s.unv=ev}break;
+    case"screenshot_sent":if(num(ev.step)){S.sends.push({step:ev.step,to:ev.to,host:ev.host,bytes:ev.bytes})}break;
     case"grounded":if(num(ev.step)){const s=stepOf(ev.step);s.gr=ev.grounding||{};s.grEv=ev}break;
     case"acted":if(num(ev.step)){const s=stepOf(ev.step);s.act=ev.result==null?"done":String(ev.result);s.actEv=ev}break;
     case"run_finished":S.fin=ev;break;
@@ -146,9 +148,16 @@ function actionText(a){
 }
 
 function counts(){
-  let ne=0,ver=0,at=0;
-  for(const s of S.steps.values()){if(s.sent)ne++;if(s.ver&&s.ver.verification&&s.ver.verification.verified)ver++;if(s.gr)at++}
-  return{ne,ver,at};
+  let ne=0,ver=0,at=0,el=0;
+  for(const s of S.steps.values()){if(s.ver&&s.ver.verification&&s.ver.verification.verified)ver++}
+  if(S.sends.length){
+    // counted from screenshot_sent events: each one is a real send
+    for(const e of S.sends){if(e.to==="near-enclave")ne++;else if(e.to==="atom-local")at++;else el++}
+  }else{
+    // older runs without the event: infer from step events
+    for(const s of S.steps.values()){if(s.sent)ne++;if(s.gr)at++}
+  }
+  return{ne,ver,at,el};
 }
 
 function pillState(){
@@ -167,7 +176,7 @@ function renderHeader(){
   else if(S.idle){t.textContent="Waiting for a run";t.className="idle"}
   else{t.textContent="Run starting…";t.className="idle"}
   const c=counts();
-  $("n-ne").textContent=c.ne;$("n-ver").textContent=c.ver;$("n-at").textContent=c.at;
+  $("n-ne").textContent=c.ne;$("n-ver").textContent=c.ver;$("n-at").textContent=c.at;$("n-else").textContent=c.el;$("t-zero").classList.toggle("alarm",c.el>0);
   const [cls,txt]=pillState();const p=$("pill");p.className="pill "+cls;p.lastChild.textContent=txt;
 }
 

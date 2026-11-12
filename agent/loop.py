@@ -3,7 +3,10 @@ import asyncio
 import time
 from dataclasses import dataclass
 
+from urllib.parse import urlparse
+
 from . import grounder, screen
+from .egress import PLANNER_BASE_URL, check_atom_url
 from .planner import Planner, PlannerUnverified, sha256_hex
 from .receipts import Run
 
@@ -34,6 +37,8 @@ def _ground(target: str, png: bytes, step: int, run: Run) -> dict | str:
     last = ""
     for instruction in (f"click {target}", _rephrase(target)):
         try:
+            check_atom_url(grounder.ATOM_URL)  # raises EgressError before anything is sent
+            run.event("screenshot_sent", step, to="atom-local", host=urlparse(grounder.ATOM_URL).netloc, bytes=len(png))
             result = grounder.ground(instruction, png)
         except grounder.GroundingError as error:
             last = str(error)
@@ -115,6 +120,7 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
             note = f"Note: the screen did not change after your last action ({previous_action}). It probably had no effect."
             history[-1] += " The screen did not change."
         try:
+            run.event("screenshot_sent", step, to="near-enclave", host=urlparse(PLANNER_BASE_URL).netloc, bytes=len(png))
             plan = await planner.plan(png, task, history, note)
         except PlannerUnverified as error:
             run.event("planner_unverified", step, error=str(error))
@@ -122,7 +128,7 @@ async def run_task(task: str, planner: Planner, run: Run, *, start_url: str | No
             return finish("stopped", f"planner answer not verified: {error}", step)
         totals["prompt"] += plan.usage.get("prompt_tokens", 0)
         totals["completion"] += plan.usage.get("completion_tokens", 0)
-        run.write_wire(step, plan.request_bytes, plan.response_bytes)
+        run.write_wire(step, plan.request_bytes, plan.response_bytes, plan.reply_key)
         run.event("planner_verified", step, planner={
             "model": planner.model, "completion_id": plan.completion_id, "e2ee": planner.e2ee,
             "latency_ms": plan.latency_ms, "thought": plan.thought, "action": plan.action, "usage": plan.usage},
