@@ -1,9 +1,11 @@
 # Build plan and handoff
 
 Private computer-use agent for the NEAR Hackathon, Privacy & Private AI track.
-Deadline: **Nov 14 2026, 23:59 UTC**. This plan was written Nov 12, about
-15:00 UTC, for handoff to Opus and Sonnet sessions. Each work package below
-names its owner model, what it depends on, and how to tell it is done.
+Deadline: **Nov 14 2026, 23:59 UTC**. Plan written Nov 12, about 15:00 UTC.
+
+Execution: one Opus session orchestrates and reviews; every work package is
+built by a Sonnet subagent. Subagents never run git; the orchestrator
+commits and pushes each package after reviewing it.
 
 > Your screen is the most private data you have. Every pixel either stays on
 > your Mac or goes only to an attested enclave.
@@ -148,7 +150,19 @@ panel never appears in a screenshot.
 
 ## Work packages
 
-### WP1. Agent core: Opus
+### WP0. Publish Atom's runtime: Sonnet
+Depends on: nothing. Decided Nov 12: publish it so judges can run the agent.
+
+Vendor the HTTP API, engine and installer into `atom/` with the banned name
+removed from code, paths, env vars and notices. Weights go up as a release
+asset of this repo, with `LICENSE` and a rewritten `NOTICE.md` that keeps
+every upstream attribution (Microsoft Florence-2, Samsung TinyClick, the
+unlicensed MLX conversion it came from). Per-file SHA-256s stay pinned.
+
+Done when: a fresh install into a new directory, from the release URL, serves
+`/ground` on a spare port and hits the five-target page.
+
+### WP1. Agent core: Sonnet
 Depends on: nothing. Everything else depends on its contracts, not its code.
 
 - `agent/planner.py`: SDK client, attestation on start, one call per step with
@@ -225,7 +239,7 @@ present, else Playwright Chromium (`--app=`, `--window-position`,
 Done when: from a clean clone with Atom running, one command produces a
 finished run with the panel live.
 
-### WP5. Reliability: Opus
+### WP5. Reliability: Sonnet
 Depends on: WP1, WP3, WP4.
 
 Run each demo task until it passes five times in a row. Tune the planner
@@ -233,13 +247,13 @@ prompt and step verification, not Atom. Compare Qwen 3.8 27B against
 `z-ai/glm-5.3-flash` on the hero task and keep the better one. Record real
 pass counts and latencies in `docs/RUNS.md`; the README quotes only those.
 
-### WP6. README and claims: Sonnet drafts, Opus audits
+### WP6. README and claims: Sonnet drafts, a fresh reviewer audits
 Depends on: WP5.
 
 Sonnet drafts: what it is, the one command, the NEAR tools used (NEAR AI
 Cloud private inference, attestation, response signatures, E2EE, the
-inference SDK), how a receipt is checked, limits. Then a **fresh** Opus
-session reads the code and README cold and lists every claim the code does
+inference SDK), how a receipt is checked, limits. Then a **fresh**
+subagent with no prior context reads the code and README cold and lists every claim the code does
 not back; fix or cut each one.
 
 Claims that must be exact:
@@ -253,7 +267,6 @@ Claims that must be exact:
 - Offline `verify` checks the signature over the wire bytes. Under E2EE those
   are ciphertext, so the decrypted action in a receipt is as recorded by the
   client.
-- Atom's runtime is not public, so the repo alone does not run the agent.
 - Never the word that is banned from this repo, in files, commits or metadata.
 
 ### WP7. Video, post, submit: human, with Sonnet for copy
@@ -264,14 +277,14 @@ filling in, a quick second task, then one byte changed in a saved response
 and `verify` failing. Post on X, then submit at nearhackathon.com/#apply
 with the repo, the post and the README.
 
-### WP8. Stretch, NEAR Intents payment step: Sonnet to research, Opus to build
+### WP8. Stretch, NEAR Intents payment step: Sonnet
 Only after WP7 is submitted. Do not start early.
 
 ## Order and timing (UTC)
 
 | When | What |
 |---|---|
-| Nov 12 evening | WP1, WP2, WP3 in parallel |
+| Nov 12 evening | WP0, WP1, WP2, WP3 in parallel |
 | Nov 13 by 06:00 | WP1 done; WP4 starts |
 | Nov 13 by 14:00 | WP4 done; WP5 starts |
 | Nov 13 by 22:00 | WP5 done; WP6 starts |
@@ -305,6 +318,6 @@ Drop task 2 or 3 rather than ship one that passes less than five in a row.
 
 ## Decisions for the author
 
-1. Publish Atom's runtime, or leave judges with the video and receipts only?
+1. ~~Publish Atom's runtime?~~ Yes (Nov 12): WP0.
 2. Top up NEAR credit before WP5?
 3. Which X account posts the demo?
