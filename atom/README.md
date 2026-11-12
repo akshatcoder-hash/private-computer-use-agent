@@ -47,13 +47,13 @@ Defaults and overrides:
 | method | path | purpose |
 |---|---|---|
 | `GET` | `/health` | model version, manifest verification, dependency versions |
-| `POST` | `/ground` | `{instruction, image_path}` or `{instruction, image_base64}` |
+| `POST` | `/ground` | `{instruction, image_base64}`; `{instruction, image_path}` only with `--allow-image-path` |
 | `POST` | `/unload` | release the loaded model |
 
 ```bash
 curl -s localhost:8760/ground \
   -H 'content-type: application/json' \
-  -d '{"instruction":"click the submit button","image_path":"/tmp/shot.png"}'
+  -d "{\"instruction\":\"click the submit button\",\"image_base64\":\"$(base64 < shot.png | tr -d '\n')\"}"
 ```
 
 ```json
@@ -70,14 +70,29 @@ pixels. If no coordinate can be parsed the result is `{"action":"abstain",...}`.
 URL. Requests are serialized, and the first `/ground` loads the model, so it is
 much slower than later calls.
 
+## Security rules
+
+Atom has no authentication, so the server refuses anything a browser or another
+local program could use to reach it by accident:
+
+- `Host` must be `127.0.0.1:<port>` or `localhost:<port>` (blocks DNS
+  rebinding), otherwise 403.
+- Any request with an `Origin` header is refused with 403; no web page should
+  call Atom.
+- `POST` requires `Content-Type: application/json`, otherwise 415.
+- `image_path` is rejected (400) unless the server is started with
+  `--allow-image-path`, because it lets any local caller make Atom read
+  arbitrary files. Use `image_base64`.
+- Uploaded screenshots are written to a private per-process temp directory
+  (mode 0700, `atom-api-<pid>-*`) and deleted as soon as the runtime returns,
+  on success, error or timeout. The directory is removed on shutdown, and
+  leftovers of dead servers are swept at startup.
+
 ## Warnings
 
-- **Do not improve the prompt wrapper.** The wrapper string is part of the
-  model's behaviour. In a 300-item probe it scored 72.7% with the trained
-  wrapper, 56.0% bare, and 48.3% paraphrased, and a third of paraphrased
-  requests returned prose instead of coordinates. Rewording the instruction is
-  fine; rewording the wrapper is not. The runtime applies
-  `what to do to execute the command? {instruction}` lowercased.
+- **Do not improve the prompt wrapper.** The runtime applies the wrapper
+  `what to do to execute the command? {instruction}`, lowercased; it is part of
+  the model's behaviour, do not change it.
 - **Loopback only, no authentication.** The API binds 127.0.0.1 and has no
   auth. Do not expose it on a network without putting your own authentication in
   front. Screenshots and instruction text are untrusted input to a vision model.

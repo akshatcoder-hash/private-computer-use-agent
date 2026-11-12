@@ -23,14 +23,20 @@ Response:
                             "raw": "click <loc_512><loc_233>",
                             "duration_ms": ..}}
 
-Atom requires Apple Silicon; see docs/DEPLOYMENT.md before deploying anywhere
-other than a Mac.
+image_path is disabled unless the server is started with --allow-image-path,
+because it lets any local caller make Atom read arbitrary files.
+
+Atom has no authentication, so every request must: carry a Host header of
+127.0.0.1:<port> or localhost:<port> (DNS rebinding), carry no Origin header
+(no browser page should call Atom), and POST with Content-Type
+application/json. Atom requires Apple Silicon.
 """
 from __future__ import annotations
 
 import argparse
 import base64
 import binascii
+import shutil
 import json
 import os
 import subprocess
@@ -44,6 +50,49 @@ HERE = Path(__file__).resolve().parent
 RUNTIME = HERE.parent / "runtime" / "atom_runtime.py"
 MAX_BODY = 32 * 1024 * 1024          # a screenshot, generously
 MAX_INSTRUCTION = 4000
+TMP_PREFIX = "atom-api-"              # private per-process dirs: atom-api-<pid>-xxxx
+
+_tmp_lock = threading.Lock()
+_tmp_dir: str | None = None
+
+
+def private_dir() -> str:
+    """Per-process temp directory (mode 0700) for uploaded screenshots."""
+    global _tmp_dir
+    with _tmp_lock:
+        if _tmp_dir is None or not os.path.isdir(_tmp_dir):
+            _tmp_dir = tempfile.mkdtemp(prefix=f"{TMP_PREFIX}{os.getpid()}-")
+            os.chmod(_tmp_dir, 0o700)
+        return _tmp_dir
+
+
+def remove_private_dir() -> None:
+    global _tmp_dir
+    with _tmp_lock:
+        if _tmp_dir:
+            shutil.rmtree(_tmp_dir, ignore_errors=True)
+        _tmp_dir = None
+
+
+def sweep_stale_dirs() -> None:
+    """Remove atom-api-<pid>-* dirs of this user whose server process is gone."""
+    root = Path(tempfile.gettempdir())
+    for entry in root.glob(f"{TMP_PREFIX}*"):
+        try:
+            pid = int(entry.name[len(TMP_PREFIX):].split("-", 1)[0])
+            if (pid == os.getpid() or not entry.is_dir() or entry.is_symlink()
+                    or entry.stat().st_uid != os.getuid()):
+                continue
+            try:
+                os.kill(pid, 0)
+                continue                       # still running
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                continue
+            shutil.rmtree(entry, ignore_errors=True)
+        except (ValueError, OSError):
+            continue
 
 
 class RuntimeError_(RuntimeError):
@@ -136,6 +185,21 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "AtomInference/1.0"
     runtime: AtomProcess
     protocol_version = "HTTP/1.1"
+    allow_image_path = False
+
+    def _reject(self, code: int, message: str):
+        self.close_connection = True       # body (if any) is left unread
+        self._send(code, {"ok": False, "error": message})
+        return True
+
+    def _guard(self) -> bool:
+        """True (after replying) if the request must not be served."""
+        port = self.server.server_address[1]
+        if self.headers.get("host") not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+            return self._reject(403, "bad Host header")
+        if self.headers.get("origin") is not None:
+            return self._reject(403, "requests with an Origin header are refused")
+        return False
 
     def log_message(self, fmt, *args):
         sys.stderr.write("atom-api %s\n" % (fmt % args))
@@ -150,6 +214,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
+        if self._guard():
+            return
         if self.path.split("?")[0] != "/health":
             return self._send(404, {"ok": False, "error": "not found"})
         try:
@@ -159,9 +225,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(503, {"ok": False, "error": str(error)})
 
     def do_POST(self):
+        if self._guard():
+            return
         route = self.path.split("?")[0]
         if route not in ("/ground", "/unload"):
             return self._send(404, {"ok": False, "error": "not found"})
+        mime = (self.headers.get("content-type") or "").split(";")[0].strip().lower()
+        if mime != "application/json":
+            return self._reject(415, "content-type must be application/json")
         try:
             length = int(self.headers.get("content-length") or 0)
         except ValueError:
@@ -173,19 +244,27 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return self._send(400, {"ok": False, "error": "body must be JSON"})
 
+        scratch = None
         try:
             if route == "/unload":
                 return self._send(200, {"ok": True,
                                         "result": self.runtime.call("unload")})
-            params = self._ground_params(request)
+            params, scratch = self._ground_params(request)
             return self._send(200, {"ok": True,
                                     "result": self.runtime.call("ground", params)})
         except ValueError as error:
             return self._send(400, {"ok": False, "error": str(error)})
         except Exception as error:
             return self._send(500, {"ok": False, "error": str(error)})
+        finally:
+            if scratch:
+                try:
+                    os.unlink(scratch)
+                except OSError:
+                    pass
 
-    def _ground_params(self, request: dict) -> dict:
+    def _ground_params(self, request: dict) -> tuple[dict, str | None]:
+        """Returns (runtime params, scratch file the caller must delete)."""
         if not isinstance(request, dict):
             raise ValueError("body must be a JSON object")
         instruction = request.get("instruction")
@@ -206,15 +285,24 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("image_base64 is not valid base64")
             if not blob:
                 raise ValueError("image_base64 decoded to nothing")
-            handle, name = tempfile.mkstemp(prefix="atom-shot-", suffix=".png")
-            with os.fdopen(handle, "wb") as stream:
-                stream.write(blob)
-            return {"instruction": instruction, "image_path": name}
+            handle, name = tempfile.mkstemp(prefix="shot-", suffix=".png",
+                                            dir=private_dir())
+            try:
+                with os.fdopen(handle, "wb") as stream:
+                    stream.write(blob)
+            except BaseException:
+                os.unlink(name)
+                raise
+            return {"instruction": instruction, "image_path": name}, name
+
+        if not self.allow_image_path:
+            raise ValueError("image_path is disabled; send image_base64 "
+                             "(or start the server with --allow-image-path)")
 
         path = request.get("image_path")
         if not isinstance(path, str) or not path:
             raise ValueError("provide image_path or image_base64")
-        return {"instruction": instruction, "image_path": path}
+        return {"instruction": instruction, "image_path": path}, None
 
 
 def main() -> int:
@@ -225,12 +313,17 @@ def main() -> int:
     parser.add_argument("--model-dir", type=Path, default=None)
     parser.add_argument("--manifest", type=Path,
                         default=HERE.parent / "runtime" / "model-manifest.json")
+    parser.add_argument("--allow-image-path", action="store_true",
+                        help="accept the image_path field (lets any local caller "
+                             "make Atom read arbitrary files; default off)")
     parser.add_argument("--python", default=sys.executable,
                         help="interpreter that has the Atom runtime installed")
     parser.add_argument("--timeout", type=float, default=180.0,
                         help="per-request seconds (first ground loads the model)")
     args = parser.parse_args()
 
+    Handler.allow_image_path = args.allow_image_path
+    sweep_stale_dirs()
     runtime = AtomProcess(args.model_dir, args.manifest, args.python, args.timeout)
     Handler.runtime = runtime
     server = ThreadingHTTPServer((args.host, args.port), Handler)
@@ -242,6 +335,7 @@ def main() -> int:
     finally:
         server.server_close()
         runtime.close()
+        remove_private_dir()
     return 0
 
 
